@@ -11,7 +11,7 @@
 ```
 cd server && npm i && cp .env.example .env && npm start
 ```
-ואז http://localhost:3000. המצלמה עובדת רק ב־HTTPS (או localhost). כפתור "דמה תשלום" זמין רק ב־localhost. כשל ברשת אינו פותח תשלום מדומה באתר ציבורי.
+ואז http://localhost:3000. המצלמה עובדת רק ב־HTTPS (או localhost). אין כפתור תשלום מדומה באפליקציה. בדיקות התשלום משתמשות בספק מדומה רק בקוד הבדיקות.
 
 ## זרימת התשלום (SmartPay Hosted Checkout)
 1. הלקוח מזין אימייל ולוחץ "מעבר לתשלום" → השרת יוצר checkout page ב־`POST /v1/checkout/pages` (סכום ב**אגורות**, `values.moreinfo1` = מזהה ההזמנה שלנו) ומחזיר `url`.
@@ -23,7 +23,7 @@ cd server && npm i && cp .env.example .env && npm start
 ב־`server/.env`: `SMARTPAY_CUID`, `SMARTPAY_SECRET_KEY`, `SMARTPAY_PAGE_UUID` (מה־dashboard), `SMARTPAY_API_URL` (sandbox: `https://devapi.smartpay.co.il/v1`, production: `https://api.protected-payment.com/v1`), ו־`PUBLIC_BASE_URL` — הכתובת הציבורית של השרת (ה־IPN וה־redirect חוזרים אליה; ל־IPN בבדיקות מקומיות צריך tunnel כמו ngrok).
 
 ## מה נשאר
-- לאמת בעלות על אימייל בשחזור רכישה ולהקשיח אכיפת הרשאות (כרגע הפייוול בצד הלקוח).
+- לחבר שירות דואר אם רוצים לשלוח קוד שחזור באימייל; כרגע הקוד נמסר באפליקציה.
 - להוציא קבלה דרך Documents API (`/document/create`, `invoice_receipt`) אחרי תשלום מוצלח.
 - לוודא שב־dashboard של SmartPay ה־IPN מופעל על ה־page.
 
@@ -36,7 +36,7 @@ cd server && npm i && cp .env.example .env && npm start
 
 ## PWA ובדיקת קובייה
 - יש לפרוס את כל קבצי הממשק יחד: index.html, cube-core.js, solver-worker.js, pwa.js, sw.js, manifest.webmanifest ותיקיית icons.
-- התקנה דורשת HTTPS או localhost. לאחר טעינה ראשונה מוצלחת, הממשק והפותר זמינים ללא רשת; תשלום ושחזור רכישה דורשים רשת.
+- התקנה דורשת HTTPS או localhost. לאחר טעינה ראשונה מוצלחת, הממשק והדרכת השכבה הראשונה זמינים ללא רשת; המשך בתשלום ושחזור רכישה דורשים רשת.
 - עדכון מוצע למשתמש ואינו מרענן באמצע פתרון. בכל שינוי בקבצים השמורים יש לשנות גם את CACHE ב־sw.js.
 - צבעי ההזנה נשמרים במכשיר. שמירת ההזנה אינה שמירה של התקדמות הסיבובים: לאחר סגירת פתרון יש להזין את המצב הפיזי העדכני.
 - הבדיקה מכסה חלקים חסרים/כפולים, סדר צבעים בלתי אפשרי בפינה, סכום כיווני פינות וקצוות וזוגיות תמורות.
@@ -69,3 +69,27 @@ DATA_DIR=/data
 
 אחרי פריסה: לאמת את הדומיין ב־Google Search Console וב־Bing Webmaster Tools, להגיש sitemap.xml, לבדוק URL Inspection ונתונים מובנים, לבדוק תצוגת קישור ב־WhatsApp ולמדוד שאילתות, קליקים והשלמת פתרונות. נדרשת גם בדיקת נייד וביצועים באתר החי. לפי התיעוד העדכני של Google, יש לבדוק גם את הכללת האתר בתכונות generative AI ב־Search Console. תוכן מועיל ונגיש לסריקה תומך גם בחיפוש AI; אין קובץ קסם או Schema שמבטיח ציטוט.
 מקור: https://developers.google.com/search/docs/fundamentals/ai-optimization-guide
+
+## תיקון פריסת התשלום (Nginx מחזיר 404 ב־/api/config)
+האתר זקוק לשרת Node: פריסה כאתר סטטי מציגה את הממשק אך אינה מפעילה את API התשלום, גם אם הוגדרו משתני סביבה.
+
+ב־Coolify:
+1. בחר **Build Pack: Dockerfile**, תיקיית בסיס `/`, קובץ `/Dockerfile`.
+2. הגדר **Port 3000**, ואת הדומיין של האפליקציה לשרת הזה. אל תבחר Static Site או Nginx בלבד.
+3. הגדר את משתני הסביבה כ־**Runtime**: `PUBLIC_BASE_URL`, `SMARTPAY_CUID`, `SMARTPAY_SECRET_KEY`, `SMARTPAY_PAGE_UUID`, `SMARTPAY_API_URL`. שמור על `UNLOCK_SECRET` הקיים.
+4. חבר Persistent Storage ל־`/data` עם הרשאת כתיבה למשתמש Node (UID 1000). `DATA_DIR=/data` כבר מוגדר ב־Dockerfile.
+5. בצע Redeploy. פתח `/api/health` (צריך לקבל `{"ok":true,"service":"cubesolve-api"}`) ואז `/api/config` (צריך `live:true`). `live` מציין שההגדרות קיימות, לא שהחשבון אושר על ידי SmartPay.
+6. עדכן את ה־PWA כשהעדכון מוצע. הגרסה הישנה אינה יודעת לקרוא את תהליך התשלום החדש.
+
+לסליקה אמיתית: `SMARTPAY_API_URL=https://api.protected-payment.com/v1` עם פרטי Production תואמים. כתובת ברירת המחדל היא Sandbox. בדוק ב־SmartPay ש־IPN מופעל בדף התשלום. לעולם אין לשים Secret בקוד צד הלקוח או במשתני build ציבוריים.
+
+### זיהוי לקוח וגישה
+הדפדפן שומר credential חתום ומאמת אותו מול השרת. SQLite הוא מקור הרכישות. שינוי `plan` ב־localStorage אינו פותח את המשך הפתרון: `/api/solve/full` בודק חתימה, תוקף, רכישה קיימת והתאמה לקובייה. האלגוריתמים להמשך בתשלום אינם מוגשים כקובץ ציבורי. מזהי קוביות חדשים משתמשים ב־SHA-256; קיימת תאימות להרשאות הישנות שנשמרו במסד.
+
+הלקוח מקבל לאחר התשלום קוד שחזור אישי (credential חתום), עם כפתור העתקה. במכשיר אחר נדרשים האימייל והקוד. הקוד לא נשלח אוטומטית באימייל; משלוח כזה מחייב חיבור שירות דואר ואינו מופעל בגרסה זו. אין להציג קודי שחזור בלוגים. אובדן הקוד יחד עם נתוני הדפדפן מחייב שחזור ידני מול המפעיל לאחר אימות הרכישה. שחזור ללא הוכחת בעלות באמצעות אימייל בלבד הוסר.
+
+החישוב לשכבה הראשונה זמין ללא רשת. הורדת יתר הפתרון דורשת שרת ואימות רכישה; לאחר שנטען, ניתן לנגן את הצעדים בזיכרון גם אם החיבור נקטע (אין שמירת התקדמות בין רענונים).
+
+בדיקות: `npm test --prefix server`, `node tests/browser.cjs`, `node tests/payment-browser.cjs` (שתי האחרונות דורשות Playwright ו־Chromium). בדיקות התשלום משתמשות בספק מדומה לפי חוזה SmartPay; הן אינן מחייבות כרטיס ואינן מחליפות עסקת בדיקה בחשבון הסליקה האמיתי. אין תמיכה אוטומטית בביטול הרשאה בעקבות החזר כספי.
+
+תיעוד הספק ששימש לאימות: https://docs.starltd.net/smartpay/guides/checkout-pages/ ו־https://docs.starltd.net/smartpay/guides/charges/

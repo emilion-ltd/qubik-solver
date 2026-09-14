@@ -3,7 +3,7 @@
   let prompt=null, waiting=null, refreshing=false;
   const online=() => {
     status.hidden=navigator.onLine;
-    status.textContent='אין חיבור לרשת. הזנה ופתרון זמינים לאחר טעינה ראשונה; תשלום ושחזור רכישה דורשים חיבור.';
+    status.textContent='אין חיבור לרשת. הזנה והדרכה לשכבה הראשונה זמינות לאחר טעינה ראשונה; המשך בתשלום ושחזור דורשים חיבור.';
   };
   online(); window.addEventListener('online',online); window.addEventListener('offline',online);
   window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); prompt=event; install.hidden=false; });
