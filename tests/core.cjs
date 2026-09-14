@@ -36,7 +36,7 @@ for(const alg of ['', 'R', "R U R' U'", "F2 U L R' F2 L' R U F2", "R U2 B' L F2 
 }
 for(const name of ['cube-core.js','solver-worker.js','pwa.js','sw.js']) new vm.Script(fs.readFileSync(path.join(root,name),'utf8'));
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) new vm.Script(match[1]);
+for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) { if(match[0].includes('application/ld+json')) JSON.parse(match[1]); else new vm.Script(match[1]); }
 const manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.webmanifest'),'utf8'));
 for(const icon of manifest.icons){
   const png=fs.readFileSync(path.join(root,icon.src));
