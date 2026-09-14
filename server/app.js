@@ -121,7 +121,8 @@ document.getElementById('update').onclick=async function(){
   }));
   for(const [name,title]of [['success','בודקים את אישור התשלום…'],['fail','התשלום לא אושר'],['cancel','התשלום בוטל']]){
     const signal=name==='success'?'done':name;
-    app.get('/pay/'+name,(_,res)=>res.set('Cache-Control','no-store').type('html').send(`<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body><h1>${title}</h1><p>אפשר לחזור לאפליקציה. הגישה נפתחת רק לאחר אישור מהשרת.</p><a href="/">חזרה לאפליקציה</a><script>parent.postMessage('smartpay:${signal}',${JSON.stringify(origin).replace(/</g,'\\u003c')})</script></body></html>`));
+    app.route('/pay/'+name).get(returnPage).post(returnPage);
+    function returnPage(_,res){return res.set('Cache-Control','no-store').type('html').send(`<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body><h1>${title}</h1><p>אפשר לחזור לאפליקציה. הגישה נפתחת רק לאחר אישור מהשרת.</p><a href="/">חזרה לאפליקציה</a><script>parent.postMessage('smartpay:${signal}',${JSON.stringify(origin).replace(/</g,'\\u003c')})</script></body></html>`);}
   }
   app.use((error,req,res,next)=>{
     const requestId=crypto.randomUUID();

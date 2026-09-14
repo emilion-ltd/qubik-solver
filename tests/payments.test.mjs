@@ -88,3 +88,15 @@ test('provider diagnostics stay in operator logs and correlate with the public e
   const logged=JSON.parse(logs[0][1]);assert.equal(logged.requestId,body.requestId);assert.equal(logged.provider.issues[0].field,'page_uuid');
  }finally{console.error=original;await new Promise(r=>server.close(r));store.close();rmSync(dir,{recursive:true,force:true});}
 });
+
+test('GET and POST returns render without granting access from browser claims',async()=>{
+ const f=await fixture();try{
+  const checkout=await f.post('/checkout/session',{plan:'unlimited',state,email:'buyer@example.com'});
+  for(const name of ['success','fail','cancel'])for(const method of ['GET','POST']){
+   const r=await fetch(f.base+'/pay/'+name,{method,...(method==='POST'?{headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'status=succeeded&transaction_id=forged'}:{})});
+   assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');
+   assert.ok((await r.text()).includes('smartpay:'+({success:'done',fail:'fail',cancel:'cancel'}[name])));
+  }
+  assert.equal((await f.post('/checkout/status',{sessionId:checkout.body.id})).body.paid,false);
+ }finally{await f.close();}
+});

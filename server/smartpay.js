@@ -77,7 +77,8 @@ export async function createCheckoutPage({amount,orderId,baseUrl,description}){
 }
 export async function getChargeByOrder(orderId){
   const {http,data}=await call('/charges/get',{moreinfo1:orderId});
-  const tx=data.transaction||{};
+  // /charges/get returns a Transaction directly; charge callbacks may wrap it.
+  const tx=data.transaction&&typeof data.transaction==='object'?data.transaction:data;
   const paid=http>=200&&http<300&&data.status==='succeeded'&&tx.operation_status==='succeeded';
-  return {paid,failed:tx.operation_status==='failed',amount:Number(tx.amount),transactionId:data.transaction_id||tx.id||null,orderId:tx.moreinfo1};
+  return {paid,failed:tx.operation_status==='failed',amount:Number(tx.amount),transactionId:tx.tuid||data.transaction_id||tx.id||null,orderId:tx.moreinfo1};
 }
