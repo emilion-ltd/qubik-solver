@@ -9,7 +9,7 @@ test('public metadata uses one absolute HTTPS canonical and share image',()=>{
   assert.match(seo.html,/property="og:image" content="https:\/\/cube.example\/icons\/icon-512.png"/);
   assert.ok(seo.robots.includes('Sitemap: https://cube.example/sitemap.xml'));
   assert.ok(seo.sitemap.includes('<loc>https://cube.example/</loc>'));
-  assert.equal((seo.html.match(/rel="canonical"/g)||[]).length,1);
+  assert.equal((seo.html.match(/<link rel="canonical"/g)||[]).length,1);
   for(const m of seo.html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) JSON.parse(m[1]);
   assert.ok(seo.html.includes('<h1'));
   assert.ok(seo.html.includes('id="faq"'));
