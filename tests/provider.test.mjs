@@ -75,3 +75,16 @@ test('checkout collects complete customer details on SmartPay and sends object m
   assert.equal(calls,2);
  }finally{globalThis.fetch=original;}
 });
+
+test('direct SmartPay transaction response verifies paid status and tuid',async()=>{
+ const original=globalThis.fetch;let reply;
+ globalThis.fetch=async()=>new Response(JSON.stringify(reply));
+ try{
+  reply={status:'succeeded',operation_status:'succeeded',tuid:'tx-direct',amount:2490,moreinfo1:'order-direct'};
+  assert.deepEqual(await provider.getChargeByOrder('order-direct'),{paid:true,failed:false,amount:2490,transactionId:'tx-direct',orderId:'order-direct'});
+  reply={status:'succeeded',amount:2490,tuid:'tx-direct'};
+  assert.equal((await provider.getChargeByOrder('order-direct')).paid,false);
+  reply={status:'failed'};
+  assert.equal((await provider.getChargeByOrder('order-direct')).paid,false);
+ }finally{globalThis.fetch=original;}
+});
