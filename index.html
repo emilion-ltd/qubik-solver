@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c2230">
+<title>CubeSolve — צלם, ותפתור</title>
+<style>
+  :root{
+    --bg:#1c2230; --panel:#262e3f; --panel2:#2f394d; --ink:#f3f1ea; --muted:#9aa3b5; --line:#3a4459;
+    --accent:#ffd500; --ok:#3ecf6f;
+    --cW:#f4f4f2; --cY:#ffd500; --cG:#0aa64f; --cB:#1f5fd0; --cR:#d0202f; --cO:#ff7a00;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Arial,Helvetica,sans-serif;line-height:1.45;-webkit-tap-highlight-color:transparent}
+  body{max-width:520px;margin:0 auto;padding:14px 14px 40px;min-height:100vh}
+  h1{font-size:24px;margin:0 0 6px} h2{font-size:19px;margin:0 0 6px}
+  p{margin:0 0 10px} .muted{color:var(--muted);font-size:14px}
+  button{font-family:inherit;cursor:pointer}
+  .btn{display:block;width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:14px;font-size:17px;margin-top:10px}
+  .btn.primary{background:var(--accent);color:#1c2230;border-color:var(--accent);font-weight:700}
+  .btn.ghost{background:transparent;color:var(--muted);font-size:14px;padding:10px}
+  .btn:disabled{opacity:.4;cursor:default}
+  .screen{display:none} .screen.on{display:block}
+  .row{display:flex;gap:8px} .row .btn{flex:1}
+  .card{background:var(--panel);border-radius:16px;padding:14px 16px;margin-top:12px}
+  [hidden]{display:none !important}
+  .W,.face.W,.nf i.W{background:var(--cW)} .Y,.face.Y,.nf i.Y{background:var(--cY)} .G,.face.G,.nf i.G{background:var(--cG)}
+  .B,.face.B,.nf i.B{background:var(--cB)} .R,.face.R,.nf i.R{background:var(--cR)} .O,.face.O,.nf i.O{background:var(--cO)}
+  .badge{display:inline-block;background:var(--panel2);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--muted)}
+
+  /* home */
+  .hero{padding:18px 0 6px}
+  .hero .demo{margin-top:16px;height:150px;border-radius:18px;background:radial-gradient(circle at 50% 45%,#2b3447 0%,var(--bg) 70%);position:relative;overflow:hidden}
+  .steps-list{display:grid;gap:8px;margin:14px 0}
+  .steps-list div{display:flex;gap:10px;align-items:center;font-size:15px}
+  .steps-list b{width:28px;height:28px;border-radius:50%;background:var(--panel2);display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+
+  /* scan */
+  .cam{position:relative;width:100%;aspect-ratio:3/4;background:#000;border-radius:18px;overflow:hidden}
+  .cam video{width:100%;height:100%;object-fit:cover;display:block}
+  .grid{position:absolute;left:50%;top:50%;width:66%;aspect-ratio:1;transform:translate(-50%,-50%);display:grid;grid-template-columns:repeat(3,1fr);gap:4%;pointer-events:none}
+  .grid i{display:block;border:2px solid rgba(255,255,255,.85);border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,.25)}
+  .grid i:nth-child(5){border-color:var(--accent)}
+  .cam .msg{position:absolute;inset:auto 0 0 0;padding:10px;background:linear-gradient(transparent,rgba(0,0,0,.7));font-size:14px;text-align:center}
+  .dots{display:flex;gap:6px;justify-content:center;margin:10px 0 4px}
+  .dots span{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted)}
+  .dots span.cur{border-color:var(--accent);color:var(--ink)} .dots span.done{border-color:var(--ok);color:var(--ok)}
+  .hold{display:flex;align-items:center;gap:12px;background:var(--panel);border-radius:14px;padding:10px 12px;margin-top:10px}
+  .hold .mini{width:54px;height:54px;flex:none;display:grid;grid-template-columns:repeat(3,1fr);gap:2px;transform:rotate(-8deg)}
+  .hold .mini i{display:block;border-radius:3px}
+  .hold p{margin:0;font-size:14px}
+
+  /* net editor */
+  .net{direction:ltr;display:grid;grid-template-columns:repeat(4,1fr);gap:24px 6px;margin:12px auto 0;max-width:380px}
+  .nf{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;aspect-ratio:1;position:relative}
+  .nf i{display:block;border-radius:4px;background:#0d1119;border:2px solid transparent}
+  .nf i.q{background:#3a4459} .nf i.sel{border-color:#fff}
+  .nf i.center{outline:2px dashed rgba(255,255,255,.35);outline-offset:-4px}
+  .nf .lbl{position:absolute;inset:auto 0 -18px 0;text-align:center;font-size:11px;color:var(--muted)}
+  .palette{display:flex;gap:8px;justify-content:center;margin:26px 0 6px}
+  .palette button{width:42px;height:42px;border-radius:10px;border:2px solid transparent}
+  .palette button.on{border-color:#fff}
+  .counts{display:flex;gap:8px;justify-content:center;font-size:12px;color:var(--muted)}
+  .counts span.bad{color:#ff7a7a}
+  .errs{color:#ff9c9c;font-size:14px;margin-top:10px}
+
+  /* 3D */
+  .scene{position:relative;height:260px;perspective:900px;touch-action:none;user-select:none;cursor:grab;background:radial-gradient(circle at 50% 45%,#2b3447 0%,var(--bg) 70%);border-radius:18px;overflow:hidden}
+  .cube{position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d}
+  .cubie{position:absolute;width:50px;height:50px;margin:-25px 0 0 -25px;transform-style:preserve-3d}
+  .face{position:absolute;inset:0;border:3px solid #0d1119;border-radius:7px;background:#0d1119;backface-visibility:hidden}
+  .face.inner{background:#141923;border-color:#141923}
+  .viewbtns{position:absolute;bottom:10px;left:10px;display:flex;gap:6px}
+  .viewbtns button{background:rgba(0,0,0,.35);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px}
+  .now{display:flex;align-items:center;gap:14px;margin:12px 0 10px;min-height:64px}
+  .notation{direction:ltr;font-size:38px;font-weight:800;min-width:78px;text-align:center;color:var(--accent);background:var(--panel);border-radius:14px;padding:6px 10px;line-height:1.1}
+  .notation.done{color:var(--ok);font-size:26px}
+  .say{font-size:16px} .say small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  .ctrl{display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:8px}
+  .ctrl button{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:13px 6px;font-size:16px}
+  .ctrl button.primary{background:var(--accent);color:#1c2230;border-color:var(--accent);font-weight:700}
+  .ctrl button:disabled{opacity:.4;cursor:default}
+  .phases{display:flex;gap:4px;margin:16px 0 6px} .phases span{flex:1;height:6px;border-radius:3px;background:var(--line)}
+  .phases span.done{background:var(--ok)} .phases span.cur{background:var(--accent)} .phases span.lock{background:repeating-linear-gradient(90deg,var(--line) 0 4px,#4a5570 4px 8px)}
+  .counter{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+  .step{background:var(--panel);border-radius:16px;padding:14px 16px;margin-top:10px}
+  .step .phase{font-size:12px;color:var(--accent);margin-bottom:2px}
+  .step p{font-size:14px;color:#d5d9e3}
+  .alg{direction:ltr;text-align:left;display:flex;flex-wrap:wrap;gap:5px}
+  .alg span{background:#1c2230;border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-weight:700;font-size:14px;color:var(--muted)}
+  .alg span.done{color:var(--ok);border-color:#2a5d3f} .alg span.cur{color:#1c2230;background:var(--accent);border-color:var(--accent)}
+  .alg span.sep{background:none;border:none;padding:4px 0;color:var(--line)}
+  .legend{font-size:12px;color:var(--muted);margin-top:14px} .legend b{direction:ltr;display:inline-block;color:var(--ink)}
+
+  /* paywall */
+  .pw{position:fixed;inset:0;background:rgba(20,25,36,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:none;align-items:flex-end;justify-content:center;z-index:50}
+  .pw.on{display:flex}
+  .pw .sheet{width:100%;max-width:520px;background:var(--bg);border-radius:22px 22px 0 0;padding:18px 18px 28px;max-height:92vh;overflow:auto;box-shadow:0 -10px 40px rgba(0,0,0,.5)}
+  .pw .close{position:absolute;left:14px;top:14px;background:none;border:none;color:var(--muted);font-size:22px}
+  .remain{font-size:15px;color:var(--muted);margin:2px 0 14px}
+  .remain b{color:var(--accent);font-size:22px}
+  .plans{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .plan{background:var(--panel);border:2px solid var(--line);border-radius:16px;padding:12px;text-align:right;color:var(--ink);position:relative}
+  .plan.on{border-color:var(--accent);background:#2f3448}
+  .plan .price{font-size:24px;font-weight:800} .plan .price s{font-size:14px;color:var(--muted);font-weight:400;margin-inline-start:6px}
+  .plan .name{font-size:14px;margin-top:4px} .plan .sub{font-size:12px;color:var(--muted);margin-top:4px}
+  .plan .tag{position:absolute;top:-10px;right:12px;background:var(--accent);color:#1c2230;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px}
+  .pay-form{margin-top:14px}
+  .field{background:var(--panel);border:1px solid var(--line);border-radius:12px;height:48px;padding:0 12px;display:flex;align-items:center;margin-top:8px;direction:ltr}
+  .field input{background:none;border:none;color:var(--ink);font-size:16px;width:100%;outline:none;direction:ltr}
+  .field.hf{padding:0} .field.hf > div{width:100%;height:100%}
+  .fields2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .promise{font-size:13px;color:var(--muted);text-align:center;margin-top:10px}
+  .promise b{color:var(--ink)}
+  .wallets{display:flex;gap:8px;margin-top:10px} .wallets button{flex:1;background:#000;color:#fff;border:1px solid #333;border-radius:12px;padding:11px;font-size:15px;font-weight:600}
+  .or{text-align:center;color:var(--muted);font-size:12px;margin:10px 0 0}
+  .payerr{color:#ff9c9c;font-size:13px;margin-top:8px;min-height:1em}
+  .devnote{font-size:12px;color:#c9b458;background:#2b2a1f;border-radius:10px;padding:8px 10px;margin-top:10px}
+  .spin{display:inline-block;width:16px;height:16px;border:2px solid #1c2230;border-top-color:transparent;border-radius:50%;animation:sp .8s linear infinite;vertical-align:middle;margin-inline-end:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ok);color:#0c1a10;padding:10px 16px;border-radius:999px;font-weight:700;display:none;z-index:60}
+</style>
+</head>
+<body>
+
+<!-- ================= HOME ================= -->
+<section class="screen on" id="s-home">
+  <div class="hero">
+    <span class="badge">כל קוביה. כל ערבוב.</span>
+    <h1 style="margin-top:10px">צלם את הקוביה, ותפתור אותה בעצמך</h1>
+    <p class="muted">מצלמים שש פאות, ומקבלים פתרון מדויק למצב של הקוביה שלך: כל סיבוב מוצג בתלת־ממד, ואתה חוזר עליו על הקוביה.</p>
+    <div class="demo"><div class="scene" id="scene-home" style="height:150px;border-radius:18px"><div class="cube" id="cube-home"></div></div></div>
+  </div>
+  <div class="steps-list">
+    <div><b>1</b>מצלמים כל פאה עם המצלמה</div>
+    <div><b>2</b>מאשרים את הצבעים שזוהו</div>
+    <div><b>3</b>עוקבים אחרי הסיבובים בתלת־ממד עד לפתרון</div>
+  </div>
+  <button class="btn primary" id="go-scan">צלם את הקוביה</button>
+  <button class="btn" id="go-manual">הזן צבעים ידנית</button>
+  <button class="btn ghost" id="go-demo">דוגמה: קוביה מצולמת מראש</button>
+  <p class="muted" style="margin-top:14px;font-size:12px">השכבה הראשונה בחינם. שאר הפתרון נפתח בתשלום חד־פעמי.</p>
+</section>
+
+<!-- ================= SCAN ================= -->
+<section class="screen" id="s-scan">
+  <div class="dots" id="dots"></div>
+  <div class="cam">
+    <video id="video" playsinline autoplay muted></video>
+    <div class="grid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="msg" id="cammsg">מכוון את המצלמה…</div>
+  </div>
+  <div class="hold"><div class="mini" id="mini"></div><p id="holdtext"></p></div>
+  <button class="btn primary" id="snap">צלם פאה זו</button>
+  <div class="row"><button class="btn ghost" id="scan-back">פאה קודמת</button><button class="btn ghost" id="scan-manual">אין מצלמה? הזן ידנית</button></div>
+  <canvas id="cv" hidden></canvas>
+</section>
+
+<!-- ================= REVIEW ================= -->
+<section class="screen" id="s-review">
+  <h2>אשר את הצבעים</h2>
+  <p class="muted">לחץ על משבצת לא נכונה, ואז על הצבע הנכון. המרכזים קבועים.</p>
+  <div class="net" id="net"></div>
+  <div class="palette" id="palette"></div>
+  <div class="counts" id="counts"></div>
+  <div class="errs" id="errs"></div>
+  <button class="btn primary" id="solve-btn">חשב פתרון</button>
+  <div class="row"><button class="btn ghost" id="rescan">צלם מחדש</button><button class="btn ghost" id="review-home">חזרה</button></div>
+</section>
+
+<!-- ================= SOLVE ================= -->
+<section class="screen" id="s-solve">
+  <p class="muted" style="margin:0 0 8px">אחיזה לכל אורך הפתרון: <b style="color:var(--ink)" id="holdline"></b></p>
+  <div class="scene" id="scene"><div class="cube" id="cube"></div>
+    <div class="viewbtns"><button id="vTop">מלמעלה</button><button id="vBottom">מלמטה</button></div>
+  </div>
+  <div class="now"><div class="notation" id="notation">—</div><div class="say" id="say"></div></div>
+  <div class="ctrl"><button id="prev">‹ חזור</button><button id="next" class="primary">הצעד הבא ›</button><button id="play">▶ נגן</button></div>
+  <div class="phases" id="phases"></div>
+  <div class="counter"><span id="cnt"></span><span id="phaseName"></span></div>
+  <div class="step" id="step"></div>
+  <div class="legend">
+    סימון: <b>U</b> עליונה · <b>D</b> תחתונה · <b>F</b> קדמית · <b>B</b> אחורית · <b>R</b> ימנית · <b>L</b> שמאלית.
+    אות לבד = רבע סיבוב עם כיוון השעון כשמסתכלים על אותה פאה, <b>'</b> = נגד כיוון השעון, <b>2</b> = חצי סיבוב.
+  </div>
+  <button class="btn ghost" id="solve-home" style="margin-top:16px">קוביה אחרת</button>
+</section>
+
+<!-- ================= PAYWALL ================= -->
+<div class="pw" id="pw">
+  <div class="sheet" style="position:relative">
+    <button class="close" id="pw-close" aria-label="סגור">✕</button>
+    <h2>השכבה הראשונה מוכנה 👏</h2>
+    <p class="remain">נשארו <b id="pw-remain">0</b> סיבובים לפתרון מלא. הקוביה שלך כבר מחכה מאחור.</p>
+    <div class="plans">
+      <button class="plan" data-plan="single"><div class="price">₪<span id="p-single">7.90</span></div><div class="name">פתרון אחד</div><div class="sub">לקוביה הזו בלבד</div></button>
+      <button class="plan on" data-plan="unlimited"><span class="tag">הכי משתלם</span><div class="price">₪<span id="p-unl">24.90</span><s id="p-unl-was" hidden></s></div><div class="name">ללא הגבלה, לתמיד</div><div class="sub">כל ערבוב, כל קוביה, גם של הילדים</div></button>
+    </div>
+    <div class="pay-form">
+      <div class="wallets" id="wallets" hidden><button id="applepay"> Pay</button><button id="gpay">G Pay</button></div>
+      <div class="or" id="or" hidden>או בכרטיס אשראי</div>
+      <div class="field"><input id="email" type="email" placeholder="אימייל לקבלה" autocomplete="email"></div>
+      <div id="cardfields">
+        <div class="field hf"><div id="sp-card-number"></div></div>
+        <div class="fields2">
+          <div class="field hf"><div id="sp-expiry"></div></div>
+          <div class="field hf"><div id="sp-cvv"></div></div>
+        </div>
+      </div>
+      <div class="payerr" id="payerr"></div>
+      <button class="btn primary" id="paybtn">פתח את הפתרון · ₪<span id="paytotal">24.90</span></button>
+      <p class="promise"><b>לא נפתר? החזר מלא.</b> תשלום מאובטח דרך SmartPay, בלי מנוי מתחדש.</p>
+      <button class="btn ghost" id="restore">כבר שילמת? שחזר רכישה</button>
+      <div class="devnote" id="devnote" hidden>מצב פיתוח: SmartPay עדיין לא מחובר. <button class="btn" style="margin-top:6px" id="devpay">דמה תשלום מוצלח</button></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>// cube-core.js — cube model, validation and layer-by-layer solver (client side, no server needed)
+const CubeCore = (() => {
+  // ---------- geometry: x right, y up, z toward viewer ----------
+  const POS = [], INDEX = new Map();
+  const key = (p, n) => p.join(',') + '|' + n.join(',');
+  for (let f = 0; f < 6; f++) for (let i = 0; i < 9; i++) {
+    const r = Math.floor(i / 3), c = i % 3; let p, n;
+    if (f === 0) { p = [-1 + c, 1, -1 + r]; n = [0, 1, 0]; }
+    else if (f === 1) { p = [1, 1 - r, 1 - c]; n = [1, 0, 0]; }
+    else if (f === 2) { p = [-1 + c, 1 - r, 1]; n = [0, 0, 1]; }
+    else if (f === 3) { p = [-1 + c, -1, 1 - r]; n = [0, -1, 0]; }
+    else if (f === 4) { p = [-1, 1 - r, -1 + c]; n = [-1, 0, 0]; }
+    else { p = [1 - c, 1 - r, -1]; n = [0, 0, -1]; }
+    POS.push({ p, n }); INDEX.set(key(p, n), POS.length - 1);
+  }
+  function rot(v, axis, k) {
+    let [x, y, z] = v;
+    for (let i = 0; i < ((k % 4) + 4) % 4; i++) {
+      if (axis === 0) [x, y, z] = [x, -z, y];
+      else if (axis === 1) [x, y, z] = [z, y, -x];
+      else [x, y, z] = [-y, x, z];
+    }
+    return [x, y, z];
+  }
+  const FACE_AXIS = { U: [1, 1], D: [1, -1], R: [0, 1], L: [0, -1], F: [2, 1], B: [2, -1] };
+  function permFor(axis, sign, k, whole) {
+    const perm = Array.from({ length: 54 }, (_, i) => i);
+    POS.forEach(({ p, n }, i) => {
+      if (whole || p[axis] === sign) perm[INDEX.get(key(rot(p, axis, k), rot(n, axis, k)))] = i;
+    });
+    return perm;
+  }
+  const MOVES = {};
+  for (const f in FACE_AXIS) {
+    const [a, s] = FACE_AXIS[f];
+    MOVES[f] = permFor(a, s, -s); MOVES[f + "'"] = permFor(a, s, s); MOVES[f + '2'] = permFor(a, s, 2);
+  }
+  const compose = (p1, p2) => p2.map(j => p1[j]);
+  const algPerm = alg => alg.split(/\s+/).filter(Boolean).reduce((p, m) => compose(p, MOVES[m]), Array.from({ length: 54 }, (_, i) => i));
+  function apply(s, perm) { const o = new Array(54); for (let j = 0; j < 54; j++) o[j] = s[perm[j]]; return o; }
+  const inverse = m => m.endsWith("'") ? m[0] : (m.endsWith('2') ? m : m + "'");
+  const faceOf = i => Math.floor(i / 9);
+  const stickersAt = p => { const out = []; POS.forEach(({ p: q }, i) => { if (q[0] === p[0] && q[1] === p[1] && q[2] === p[2]) out.push(i); }); return out; };
+
+  // ---------- validation ----------
+  function centers(s) { return [s[4], s[13], s[22], s[31], s[40], s[49]]; }
+  function validate(s) {
+    // s: array of 54 color chars
+    const errs = [];
+    const cnt = {}; s.forEach(c => cnt[c] = (cnt[c] || 0) + 1);
+    const C = centers(s);
+    if (new Set(C).size !== 6) errs.push('שישה מרכזים חייבים להיות בצבעים שונים');
+    for (const c of C) if (cnt[c] !== 9) errs.push(`הצבע ${c} מופיע ${cnt[c] || 0} פעמים במקום 9`);
+    if (errs.length) return errs;
+    // piece sets
+    const want = new Set(), got = new Set();
+    for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+      const idx = stickersAt([x, y, z]); if (idx.length < 2) continue;
+      want.add(idx.map(i => C[faceOf(i)]).sort().join(''));
+      got.add(idx.map(i => s[i]).sort().join(''));
+    }
+    for (const w of want) if (!got.has(w)) errs.push('חסרה חתיכה: ' + w.split('').join('-'));
+    return errs;
+  }
+
+  // ---------- solver ----------
+  const ROT = { F: 'R', R: 'B', B: 'L', L: 'F', U: 'U', D: 'D' };
+  const rotateAlg = (alg, k) => { for (let i = 0; i < k; i++) alg = alg.split(' ').map(m => ROT[m[0]] + m.slice(1)).join(' '); return alg; };
+  const macro = (label, alg, group) => ({ label, alg, group, perm: algPerm(alg), moves: alg.split(' ') });
+  const U_MACROS = [macro('U', 'U', 'U'), macro("U'", "U'", 'U'), macro('U2', 'U2', 'U')];
+  const BASIC = Object.keys(MOVES).map(m => macro(m, m, m[0]));
+
+  function makeGoal(pairs) { return s => { for (const [i, c] of pairs) if (s[i] !== c) return false; return true; }; }
+
+  function dfsFirst(s, macros, goal, depth, path, last) {
+    if (goal(s)) return path;
+    if (depth === 0) return null;
+    for (const m of macros) {
+      if (last && m.group === last.group) continue;
+      const r = dfsFirst(apply(s, m.perm), macros, goal, depth - 1, path.concat(m), m);
+      if (r) return r;
+    }
+    return null;
+  }
+  function dfsAll(s, macros, goal, depth, path, last, out) {
+    if (goal(s)) { out.push(path); return; }
+    if (depth === 0) return;
+    for (const m of macros) {
+      if (last && m.group === last.group && m.group === 'U') continue;
+      dfsAll(apply(s, m.perm), macros, goal, depth - 1, path.concat(m), m, out);
+    }
+  }
+  function search(s, macros, goal, depth) {
+    if (macros === BASIC) return dfsFirst(s, macros, goal, depth, [], null);
+    const out = []; dfsAll(s, macros, goal, depth, [], null, out);
+    if (!out.length) return null;
+    return out.reduce((a, b) => (b.reduce((n, m) => n + m.moves.length, 0) < a.reduce((n, m) => n + m.moves.length, 0) ? b : a));
+  }
+  function solveGoal(s, goal, macros, maxd) {
+    for (let d = 0; d <= maxd; d++) { const r = search(s, macros, goal, d); if (r) return r; }
+    return null;
+  }
+
+  const HEB = { W: 'לבן', Y: 'צהוב', G: 'ירוק', B: 'כחול', R: 'אדום', O: 'כתום' };
+
+  function solve(initial, opts = {}) {
+    // initial: 54 chars, any color letters; returns {steps:[{phase,title,desc,alg,moves}]} or {error}
+    let s = initial.slice();
+    const C = centers(s);
+    const colorName = c => HEB[c] || c;
+    const pairsFor = positions => { const out = []; for (const p of positions) for (const i of stickersAt(p)) out.push([i, C[faceOf(i)]]); return out; };
+    const pieceName = p => stickersAt(p).map(i => C[faceOf(i)]).sort((a, b) => 'WYGBRO'.indexOf(a) - 'WYGBRO'.indexOf(b)).map(colorName).join('-');
+    const steps = [];
+    const record = (phase, title, desc, algs) => steps.push({ phase, title, desc, alg: algs.map(m => m.label).join(' , '), moves: algs.flatMap(m => m.moves) });
+    const done = [];
+    function solvePieces(positions, macros, maxd, phase, title, descFn) {
+      let remaining = positions.slice();
+      while (remaining.length) {
+        let found = null;
+        for (let d = 0; d <= maxd && !found; d++) for (const p of remaining) {
+          const r = search(s, macros, makeGoal(pairsFor(done.concat([p]))), d);
+          if (r) { found = [p, r]; break; }
+        }
+        if (!found) throw new Error('phase ' + phase);
+        const [p, r] = found;
+        for (const m of r) s = apply(s, m.perm);
+        record(phase, title, descFn(p), r);
+        done.push(p); remaining = remaining.filter(q => q !== p);
+      }
+    }
+    try {
+      // 1. white (D) cross
+      solvePieces([[0, -1, 1], [1, -1, 0], [0, -1, -1], [-1, -1, 0]], BASIC, 6, 1, 'הצלב ה' + colorName(C[3]),
+        p => `הכנס את הקצה ${pieceName(p)} למקומו: ${colorName(C[3])} למטה, והצבע השני מול המרכז שלו.`);
+      // 2. D corners
+      const cm = U_MACROS.slice();
+      for (let k = 0; k < 4; k++) {
+        const base = rotateAlg("R U R' U'", k);
+        for (let n = 1; n <= 5; n++) cm.push(macro('(' + base + ')×' + n, Array(n).fill(base).join(' '), 'slot' + k));
+        const alt = rotateAlg("R U2 R' U' R U R'", k); cm.push(macro(alt, alt, 'slot' + k));
+      }
+      solvePieces([[1, -1, 1], [-1, -1, 1], [1, -1, -1], [-1, -1, -1]], cm, 3, 2, 'פינות השכבה הראשונה',
+        p => `הכנס את הפינה ${pieceName(p)} למקומה: מביאים אותה מעל המקום שלה ומבצעים R U R' U' עד שהיא נכנסת (או הגרסה הקצרה R U2 R' U' R U R' כשהצבע התחתון פונה למעלה). האותיות משתנות לפי הפינה כי ממשיכים להחזיק את הקוביה באותה אחיזה.`);
+      // 3. middle layer
+      const mm = U_MACROS.slice();
+      for (let k = 0; k < 4; k++) {
+        const r = rotateAlg("U R U' R' U' F' U F", k), l = rotateAlg("U' L' U L U F U' F'", k);
+        mm.push(macro('הכנסה ימינה: ' + r, r, 'mid' + k)); mm.push(macro('הכנסה שמאלה: ' + l, l, 'mid' + k));
+      }
+      solvePieces([[1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1]], mm, 3, 3, 'השכבה השנייה',
+        p => `הכנס את הקצה ${pieceName(p)} למקומו בשכבה האמצעית: קודם מיישרים אותו למעלה מול המרכז התואם, ואז אלגוריתם הכנסה ימינה (U R U' R' U' F' U F) או שמאלה (U' L' U L U F U' F'), עם האותיות מותאמות לפאה שמולה עומד הקצה.`);
+      // 4. top cross (orientation)
+      const topEdges = [], topCorners = [];
+      POS.forEach(({ p, n }, i) => { if (n[1] === 1) { if ((p[0] === 0) !== (p[2] === 0)) topEdges.push(i); else if (p[0] !== 0 && p[2] !== 0) topCorners.push(i); } });
+      const top = colorName(C[0]);
+      let r = solveGoal(s, st => topEdges.every(i => st[i] === C[0]), U_MACROS.concat([macro("F R U R' U' F'", "F R U R' U' F'", 'yc')]), 5);
+      if (!r) throw new Error('phase 4');
+      for (const m of r) s = apply(s, m.perm);
+      if (r.length) record(4, 'הצלב ה' + top, `האלגוריתם F R U R' U' F' הופך קצוות ${top}ים כלפי מעלה. חוזרים עליו (עם סיבובי U ביניהם לכיוון הצורה) עד שנוצר צלב.`, r);
+      // 5. top face
+      r = solveGoal(s, st => topCorners.every(i => st[i] === C[0]), U_MACROS.concat([macro("R U R' U R U2 R'", "R U R' U R U2 R'", 'sune')]), 6);
+      if (!r) throw new Error('phase 5');
+      for (const m of r) s = apply(s, m.perm);
+      if (r.length) record(5, 'הפאה ה' + top + 'ה', `האלגוריתם R U R' U R U2 R' (Sune) מסובב פינות. חוזרים עליו, עם סיבובי U ביניהם, עד שכל הפאה העליונה ${top}ה.`, r);
+      // 6. corner permutation (up to U)
+      const cornerGoal = makeGoal(pairsFor([[1, 1, 1], [-1, 1, 1], [1, 1, -1], [-1, 1, -1]]));
+      const placed = st => { for (let k = 0; k < 4; k++) { if (cornerGoal(st)) return true; st = apply(st, MOVES.U); } return false; };
+      r = solveGoal(s, placed, U_MACROS.concat([macro("R' F R' B2 R F' R' B2 R2", "R' F R' B2 R F' R' B2 R2", 'cp'), macro("R2 B2 R F R' B2 R F' R", "R2 B2 R F R' B2 R F' R", 'cp')]), 6);
+      if (!r) throw new Error('phase 6');
+      for (const m of r) s = apply(s, m.perm);
+      if (r.length) record(6, 'סידור הפינות העליונות', `האלגוריתם R' F R' B2 R F' R' B2 R2 מסובב שלוש פינות עליונות במעגל בלי לקלקל את הפאה העליונה (הגרסה ההפוכה: R2 B2 R F R' B2 R F' R). אחריו כל פינה יושבת בין שני הצבעים שלה.`, r);
+      // 7. edges + final U
+      const solvedGoal = makeGoal(Array.from({ length: 54 }, (_, i) => [i, C[faceOf(i)]]));
+      r = solveGoal(s, solvedGoal, U_MACROS.concat([macro("F2 U L R' F2 L' R U F2", "F2 U L R' F2 L' R U F2", 'ep'), macro("F2 U' L R' F2 L' R U' F2", "F2 U' L R' F2 L' R U' F2", 'ep')]), 6);
+      if (!r) throw new Error('phase 7');
+      for (const m of r) s = apply(s, m.perm);
+      if (r.length) record(7, 'סידור הקצוות העליונים', `האלגוריתם F2 U L R' F2 L' R U F2 מסובב שלושה קצוות עליונים במעגל (הגרסה עם U' בכיוון ההפוך). אחריו נשאר רק ליישר את השכבה העליונה.`, r);
+      return { steps, total: steps.reduce((n, st) => n + st.moves.length, 0) };
+    } catch (e) {
+      return { error: 'המצב שנסרק לא ניתן לפתרון (' + e.message + '). כנראה חתיכה מסובבת או שני מדבקות התחלפו. בדוק את הצבעים ותקן.' };
+    }
+  }
+
+  return { POS, INDEX, MOVES, FACE_AXIS, apply, algPerm, inverse, validate, solve, centers, key };
+})();
+
+</script>
+<script>
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const CONFIG = {
+  apiBase: '/api',
+  prices: { single: 7.90, unlimited: 24.90 },
+  freePhases: 2,                     // phases 1-2 free, 3-7 paid
+  smartpay: {
+    sdkUrl: '',                      // TODO: SmartPay hosted-fields JS URL from docs.starltd.net/smartpay
+    publicKey: '',                   // TODO: public / terminal key
+  },
+  track: (event, data) => { try { console.log('[track]', event, data || ''); } catch (e) {} }
+};
+
+/* ============================================================
+   SmartPay Hosted Fields adapter — the only place that talks to SmartPay's JS.
+   Fill the 4 TODOs from the docs; everything else already works.
+   ============================================================ */
+const SmartPayClient = {
+  ready: false, sdk: null,
+  async load() {
+    if (!CONFIG.smartpay.sdkUrl) return false;              // dev mode
+    if (this.ready) return true;
+    await new Promise((res, rej) => { const s = document.createElement('script'); s.src = CONFIG.smartpay.sdkUrl; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+    // TODO 1: create the SDK instance with the public key, e.g. this.sdk = new window.SmartPay(CONFIG.smartpay.publicKey);
+    this.ready = true; return true;
+  },
+  async mount(session) {
+    // TODO 2: render hosted fields into #sp-card-number, #sp-expiry, #sp-cvv using session.clientToken
+    // e.g. this.fields = await this.sdk.hostedFields.create({ session: session.clientToken,
+    //        fields: { number: '#sp-card-number', expiry: '#sp-expiry', cvv: '#sp-cvv' },
+    //        styles: { input: { color: '#f3f1ea', fontSize: '16px' } } });
+  },
+  async tokenize() {
+    // TODO 3: submit the hosted fields and return the one-time payment token
+    // e.g. const r = await this.fields.tokenize(); return r.token;
+    throw new Error('SmartPay tokenize not implemented');
+  },
+  canWallet() { return false; },                            // TODO 4: return true if Apple Pay / Google Pay is available via the SDK
+  async walletPay() { throw new Error('wallet not implemented'); }
+};
+
+/* ============================================================
+   Unlock storage (works without localStorage too)
+   ============================================================ */
+const Unlock = {
+  mem: null,
+  get() { if (this.mem) return this.mem; try { this.mem = JSON.parse(localStorage.getItem('cube_unlock') || 'null'); } catch (e) {} return this.mem; },
+  set(u) { this.mem = u; try { localStorage.setItem('cube_unlock', JSON.stringify(u)); } catch (e) {} },
+  has(cubeId) { const u = this.get(); if (!u) return false; if (u.exp && Date.now() > u.exp) return false; return u.plan === 'unlimited' || u.cubeId === cubeId; }
+};
+
+/* ============================================================
+   App state & navigation
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const COLORS = ['W','Y','G','B','R','O'];
+const HEB = { W:'לבן', Y:'צהוב', G:'ירוק', B:'כחול', R:'אדום', O:'כתום' };
+let facelets = new Array(54).fill('?');
+let cubeId = '';
+function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0,0); }
+function toast(t) { const e = $('toast'); e.textContent = t; e.style.display = 'block'; setTimeout(() => e.style.display = 'none', 2200); }
+const hash = str => { let h = 5381; for (const c of str) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0; return h.toString(36); };
+
+/* ============================================================
+   SCAN — guided capture, white on top, green facing you
+   ============================================================ */
+const SCAN_ORDER = [
+  { face:'F', center:'G', text:'לבן למעלה, ירוק מולך. צלם את הפאה הירוקה.' },
+  { face:'R', center:'R', text:'סובב את הקוביה שמאלה (לבן נשאר למעלה). צלם את הפאה האדומה.' },
+  { face:'B', center:'B', text:'סובב שוב שמאלה. צלם את הפאה הכחולה.' },
+  { face:'L', center:'O', text:'סובב שוב שמאלה. צלם את הפאה הכתומה.' },
+  { face:'U', center:'W', text:'חזור לירוק מולך, והטה את הקוביה כלפיך כך שהלבן מול המצלמה והירוק בתחתית התמונה.' },
+  { face:'D', center:'Y', text:'ירוק מולך, הטה את הקוביה כלפי מעלה: הצהוב מול המצלמה והירוק בראש התמונה.' },
+];
+const FACE_OFFSET = { U:0, R:9, F:18, D:27, L:36, B:45 };
+let scanIdx = 0, samples = {}; // face -> [9 x [r,g,b]]
+let stream = null;
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
+    $('video').srcObject = stream; $('cammsg').textContent = 'מלא את הריבועים עם הפאה, והחזק ישר';
+    return true;
+  } catch (e) {
+    $('cammsg').textContent = 'אין גישה למצלמה (נדרש HTTPS ואישור). אפשר להזין ידנית.';
+    return false;
+  }
+}
+function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
+function renderScanUI() {
+  const d = $('dots'); d.innerHTML = '';
+  SCAN_ORDER.forEach((s, i) => { const sp = document.createElement('span'); sp.textContent = i + 1; sp.className = i < scanIdx ? 'done' : (i === scanIdx ? 'cur' : ''); d.appendChild(sp); });
+  const cur = SCAN_ORDER[scanIdx]; $('holdtext').textContent = cur.text;
+  const mini = $('mini'); mini.innerHTML = ''; for (let i = 0; i < 9; i++) { const c = document.createElement('i'); c.className = cur.center; mini.appendChild(c); }
+  $('scan-back').disabled = scanIdx === 0;
+}
+function sampleFace() {
+  const v = $('video'), cv = $('cv');
+  if (!v.videoWidth) return null;
+  cv.width = v.videoWidth; cv.height = v.videoHeight;
+  const ctx = cv.getContext('2d', { willReadFrequently: true }); ctx.drawImage(v, 0, 0);
+  // map the on-screen grid (66% of the displayed width, centered) to video pixels (object-fit: cover)
+  const box = v.getBoundingClientRect(), scale = Math.max(box.width / cv.width, box.height / cv.height);
+  const dispW = cv.width * scale, dispH = cv.height * scale, offX = (dispW - box.width) / 2, offY = (dispH - box.height) / 2;
+  const gridPx = box.width * 0.66, cell = gridPx / 3, gx = (box.width - gridPx) / 2, gy = (box.height - gridPx) / 2;
+  const out = [];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+    const cx = (gx + c * cell + cell / 2 + offX) / scale, cy = (gy + r * cell + cell / 2 + offY) / scale, rad = (cell * 0.18) / scale;
+    const img = ctx.getImageData(Math.round(cx - rad), Math.round(cy - rad), Math.round(rad * 2), Math.round(rad * 2)).data;
+    let R = 0, G = 0, B = 0, n = 0; for (let i = 0; i < img.length; i += 4) { R += img[i]; G += img[i+1]; B += img[i+2]; n++; }
+    out.push([R / n, G / n, B / n]);
+  }
+  return out;
+}
+function classify() {
+  // reference = the 6 sampled centers; assign greedily so every color is used exactly 9 times
+  const refs = SCAN_ORDER.map(s => ({ color: s.center, rgb: samples[s.face][4] }));
+  const feat = ([r,g,b]) => { const s = r + g + b + 1e-6, v = Math.max(r,g,b) / 255; return [r/s*3, g/s*3, b/s*3, v*0.6]; };
+  const dist = (a, b) => { const fa = feat(a), fb = feat(b); return fa.reduce((t, x, i) => t + (x - fb[i]) ** 2, 0); };
+  const all = [];
+  for (const s of SCAN_ORDER) samples[s.face].forEach((rgb, i) => refs.forEach(ref => all.push({ idx: FACE_OFFSET[s.face] + i, color: ref.color, d: dist(rgb, ref.rgb) })));
+  all.sort((a, b) => a.d - b.d);
+  const used = {}, assigned = new Array(54).fill(null);
+  for (const a of all) { if (assigned[a.idx] !== null || (used[a.color] || 0) >= 9) continue; assigned[a.idx] = a.color; used[a.color] = (used[a.color] || 0) + 1; }
+  facelets = assigned.map(c => c || '?');
+  SCAN_ORDER.forEach(s => facelets[FACE_OFFSET[s.face] + 4] = s.center);
+}
+$('go-scan').onclick = async () => { scanIdx = 0; samples = {}; show('s-scan'); renderScanUI(); await startCamera(); };
+$('snap').onclick = () => {
+  const s = sampleFace();
+  if (!s) { toast('המצלמה עדיין לא מוכנה'); return; }
+  samples[SCAN_ORDER[scanIdx].face] = s;
+  CONFIG.track('scan_face', scanIdx);
+  if (scanIdx < 5) { scanIdx++; renderScanUI(); }
+  else { stopCamera(); classify(); openReview(); }
+};
+$('scan-back').onclick = () => { if (scanIdx > 0) { scanIdx--; renderScanUI(); } };
+$('scan-manual').onclick = () => { stopCamera(); manualStart(); };
+$('go-manual').onclick = () => manualStart();
+function manualStart() {
+  facelets = new Array(54).fill('?');
+  SCAN_ORDER.forEach(s => facelets[FACE_OFFSET[s.face] + 4] = s.center);
+  openReview();
+}
+$('go-demo').onclick = () => {
+  // the cube from the sample photos, white on top / green front
+  facelets = 'WWWWWWWWWGOBGRROYYBGOYGRYYYBBGOYGRORRBRYORYBOORGBBOGGB'.split('');
+  openReview();
+};
+
+/* ============================================================
+   REVIEW — net editor
+   ============================================================ */
+const NET_POS = { U:[1,0], L:[0,1], F:[1,1], R:[2,1], B:[3,1], D:[1,2] };
+const NET_LBL = { U:'למעלה (לבן)', L:'שמאל (כתום)', F:'קדימה (ירוק)', R:'ימין (אדום)', B:'אחור (כחול)', D:'למטה (צהוב)' };
+let paint = 'W', netCells = [];
+function buildNet() {
+  const net = $('net'); net.innerHTML = ''; netCells = [];
+  'URFDLB'.split('').forEach((f, fi) => {
+    const box = document.createElement('div'); box.className = 'nf';
+    box.style.gridColumn = NET_POS[f][0] + 1; box.style.gridRow = NET_POS[f][1] + 1;
+    for (let i = 0; i < 9; i++) {
+      const c = document.createElement('i'); const idx = fi * 9 + i; netCells[idx] = c;
+      if (i === 4) c.classList.add('center'); else c.onclick = () => { facelets[idx] = paint; paintNet(); };
+      box.appendChild(c);
+    }
+    const l = document.createElement('div'); l.className = 'lbl'; l.textContent = NET_LBL[f]; box.appendChild(l);
+    net.appendChild(box);
+  });
+  const pal = $('palette'); pal.innerHTML = '';
+  COLORS.forEach(c => { const b = document.createElement('button'); b.className = c + (c === paint ? ' on' : ''); b.title = HEB[c]; b.onclick = () => { paint = c; [...pal.children].forEach(x => x.classList.toggle('on', x === b)); }; pal.appendChild(b); });
+}
+function paintNet() {
+  netCells.forEach((c, i) => { c.className = (i % 9 === 4 ? 'center ' : '') + (facelets[i] === '?' ? 'q' : facelets[i]); });
+  const cnt = {}; facelets.forEach(c => cnt[c] = (cnt[c] || 0) + 1);
+  $('counts').innerHTML = COLORS.map(c => `<span class="${(cnt[c]||0) === 9 ? '' : 'bad'}">${HEB[c]} ${cnt[c]||0}/9</span>`).join('');
+  $('errs').textContent = '';
+}
+function openReview() { buildNet(); paintNet(); show('s-review'); CONFIG.track('review_open'); }
+$('rescan').onclick = () => $('go-scan').onclick();
+$('review-home').onclick = () => show('s-home');
+$('solve-btn').onclick = () => {
+  if (facelets.includes('?')) { $('errs').textContent = 'יש עוד משבצות ריקות.'; return; }
+  const errs = CubeCore.validate(facelets);
+  if (errs.length) { $('errs').textContent = errs.join(' · '); CONFIG.track('validate_fail', errs); return; }
+  $('solve-btn').innerHTML = '<span class="spin"></span>מחשב פתרון…';
+  setTimeout(() => {
+    // solve with white DOWN, green front: rotate the scanned cube 180° around the front axis
+    const rotated = rotateZ2(facelets);
+    const res = CubeCore.solve(rotated);
+    $('solve-btn').textContent = 'חשב פתרון';
+    if (res.error) { $('errs').textContent = res.error; CONFIG.track('solve_fail'); return; }
+    cubeId = hash(rotated.join(''));
+    CONFIG.track('solve_ok', { moves: res.total });
+    startSolve(rotated, res.steps);
+  }, 30);
+};
+function rotateZ2(s) {
+  // whole-cube 180° turn about the front axis: U<->D, R<->L, F and B rotate 180°
+  const P = CubeCore.POS, out = new Array(54);
+  P.forEach(({ p, n }, i) => { const q = [-p[0], -p[1], p[2]], m = [-n[0], -n[1], n[2]]; out[CubeCore.INDEX.get(CubeCore.key(q, m))] = s[i]; });
+  return out;
+}
+
+/* ============================================================
+   SOLVE — 3D player + steps + paywall gate
+   ============================================================ */
+const GAP = 53, NORMALS = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+const FACE_T = { '1,0,0':'rotateY(90deg)', '-1,0,0':'rotateY(-90deg)', '0,1,0':'rotateX(90deg)', '0,-1,0':'rotateX(-90deg)', '0,0,1':'', '0,0,-1':'rotateY(180deg)' };
+const CSS_AX = ['X','Y','Z'], CSS_SIGN = [-1, 1, -1];
+function build3D(container, small) {
+  const cubies = []; container.innerHTML = '';
+  const g = small ? 30 : GAP, sz = small ? 28 : 50;
+  for (let x=-1;x<=1;x++) for (let y=-1;y<=1;y++) for (let z=-1;z<=1;z++) {
+    if (!x && !y && !z) continue;
+    const el = document.createElement('div'); el.className = 'cubie'; if (small) { el.style.width = el.style.height = sz + 'px'; el.style.margin = `-${sz/2}px 0 0 -${sz/2}px`; }
+    const base = `translate3d(${x*g}px, ${-y*g}px, ${z*g}px)`; el.style.transform = base;
+    const faces = [];
+    NORMALS.forEach(n => { const f = document.createElement('div'); f.className = 'face'; f.style.transform = `${FACE_T[n.join(',')]} translateZ(${sz/2}px)`;
+      const idx = CubeCore.INDEX.get(CubeCore.key([x,y,z], n)); faces.push({ el: f, idx: idx === undefined ? -1 : idx }); el.appendChild(f); });
+    container.appendChild(el); cubies.push({ el, x, y, z, base, faces });
+  }
+  return cubies;
+}
+function paint3D(cubies, state) { cubies.forEach(c => c.faces.forEach(f => f.el.className = 'face ' + (f.idx < 0 ? 'inner' : state[f.idx]))); }
+function makeView(scene, cube, rx0, ry0) {
+  let rx = rx0, ry = ry0, drag = null;
+  const set = () => cube.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg)`;
+  scene.addEventListener('pointerdown', e => { drag = { x:e.clientX, y:e.clientY, rx, ry }; scene.setPointerCapture(e.pointerId); });
+  scene.addEventListener('pointermove', e => { if (!drag) return; ry = drag.ry + (e.clientX - drag.x) * .5; rx = Math.max(-90, Math.min(90, drag.rx - (e.clientY - drag.y) * .5)); set(); });
+  scene.addEventListener('pointerup', () => drag = null); scene.addEventListener('pointercancel', () => drag = null);
+  set(); return { setAngles: (a, b) => { rx = a; ry = b; set(); } };
+}
+// home demo cube (idle spin)
+const homeCubies = build3D($('cube-home'), true); paint3D(homeCubies, 'YYYYYYYYYOOOOOOOOOGGGGGGGGGWWWWWWWWWRRRRRRRRRBBBBBBBBB'.split(''));
+let spin = -38; setInterval(() => { spin += .4; $('cube-home').style.transform = `rotateX(-28deg) rotateY(${spin}deg)`; }, 40);
+
+const P = { state: null, steps: [], flat: [], pos: 0, busy: false, playing: false, cubies: null, view: null };
+const NAME = { U:'העליונה (צהוב)', D:'התחתונה (לבן)', F:'הקדמית (ירוק)', B:'האחורית (כחול)', R:'הימנית (כתום)', L:'השמאלית (אדום)' };
+const DIRW = { '':'רבע סיבוב עם כיוון השעון', "'":'רבע סיבוב נגד כיוון השעון', '2':'חצי סיבוב (180°)' };
+const PHASE_NAMES = ['צלב לבן','פינות לבנות','שכבה שנייה','צלב צהוב','פאה צהובה','פינות צהובות','קצוות צהובים'];
+
+function startSolve(initial, steps) {
+  P.initial = initial.slice(); P.state = initial.slice(); P.steps = steps; P.pos = 0; P.playing = false;
+  P.flat = []; steps.forEach((s, si) => s.moves.forEach(m => P.flat.push({ step: si, m })));
+  if (!P.cubies) { P.cubies = build3D($('cube')); P.view = makeView($('scene'), $('cube'), -28, -38); }
+  $('holdline').textContent = 'לבן למטה, ירוק מולך, כתום מימין';
+  const ph = $('phases'); ph.innerHTML = ''; PHASE_NAMES.forEach(() => ph.appendChild(document.createElement('span')));
+  paint3D(P.cubies, P.state); render(); showMove(null); show('s-solve');
+}
+$('vTop').onclick = () => P.view.setAngles(-28, -38); $('vBottom').onclick = () => P.view.setAngles(30, -38);
+
+function animate(m, cb) {
+  const face = m[0], suf = m.slice(1), [ax, sg] = CubeCore.FACE_AXIS[face];
+  const turns = suf === "'" ? -1 : (suf === '2' ? 2 : 1), target = CSS_SIGN[ax] * (-90 * sg * turns);
+  const layer = P.cubies.filter(c => [c.x, c.y, c.z][ax] === sg), dur = 380, t0 = performance.now();
+  (function frame(t) {
+    let k = Math.min(1, (t - t0) / dur); k = k < .5 ? 2*k*k : -1 + (4 - 2*k) * k;
+    layer.forEach(c => c.el.style.transform = `rotate${CSS_AX[ax]}(${target * k}deg) ${c.base}`);
+    if (k < 1) requestAnimationFrame(frame);
+    else { P.state = CubeCore.apply(P.state, CubeCore.MOVES[m]); layer.forEach(c => c.el.style.transform = c.base); paint3D(P.cubies, P.state); cb(); }
+  })(t0);
+}
+function locked(pos) { return pos < P.flat.length && P.steps[P.flat[pos].step].phase > CONFIG.freePhases && !Unlock.has(cubeId); }
+function forward(cb) {
+  if (P.busy || P.pos >= P.flat.length) { cb && cb(false); return; }
+  if (locked(P.pos)) { P.playing = false; render(); openPaywall(); cb && cb(false); return; }
+  P.busy = true; const m = P.flat[P.pos].m; showMove(m);
+  animate(m, () => { P.pos++; P.busy = false; render(); if (P.pos >= P.flat.length) { showMove(null); CONFIG.track('solved'); } cb && cb(true); });
+}
+function backward() {
+  if (P.busy || P.pos <= 0) return;
+  P.busy = true; P.pos--; animate(CubeCore.inverse(P.flat[P.pos].m), () => { P.busy = false; render(); showMove(null); });
+}
+function showMove(m) {
+  const n = $('notation'), s = $('say');
+  if (m === null) {
+    if (P.pos >= P.flat.length) { n.textContent = 'פתור!'; n.className = 'notation done'; s.innerHTML = 'כל הכבוד. הקוביה שלמה.'; }
+    else { n.textContent = '—'; n.className = 'notation'; s.innerHTML = 'לחץ "הצעד הבא" כדי לראות את הסיבוב הבא.<small>הסיבוב מוצג בתלת־ממד, ואז אתה חוזר עליו על הקוביה שלך.</small>'; }
+    return;
+  }
+  n.textContent = m; n.className = 'notation'; s.innerHTML = `סובב את הפאה ${NAME[m[0]]}<small>${DIRW[m.slice(1)]}</small>`;
+}
+function countMoves(chunk) {
+  let body = chunk.includes(':') ? chunk.split(':')[1] : chunk; const rep = body.match(/×(\d+)/); let t = 1;
+  if (rep) { t = +rep[1]; body = body.replace(/×\d+/, ''); }
+  return body.replace(/[()]/g, '').trim().split(/\s+/).filter(Boolean).length * t;
+}
+function render() {
+  const N = P.flat.length, si = P.pos < N ? P.flat[P.pos].step : P.steps.length - 1, s = P.steps[si], phase = s.phase;
+  [...$('phases').children].forEach((el, i) => el.className = (i + 1 < phase || P.pos >= N) ? 'done' : (i + 1 === phase ? 'cur' : (i + 1 > CONFIG.freePhases && !Unlock.has(cubeId) ? 'lock' : '')));
+  $('phaseName').textContent = `שלב ${phase} מתוך 7: ${PHASE_NAMES[phase - 1]}`;
+  $('cnt').textContent = `סיבוב ${Math.min(P.pos + 1, N)} מתוך ${N}`;
+  let html = `<div class="phase">שלב ${phase} · ${PHASE_NAMES[phase - 1]}${phase <= CONFIG.freePhases && !Unlock.has(cubeId) ? ' · בחינם' : ''}</div><h2>${s.title}</h2><p>${s.desc}</p>`;
+  const start = P.flat.findIndex(f => f.step === si);
+  if (s.moves.length) {
+    html += '<div class="alg">'; let mi = 0;
+    s.alg.split(' , ').forEach((chunk, ci) => {
+      if (ci) html += '<span class="sep">|</span>';
+      if (chunk.includes(':')) html += `<span class="sep" style="direction:rtl">${chunk.split(':')[0]}:</span>`;
+      for (let k = 0; k < countMoves(chunk); k++) { const gi = start + mi; html += `<span class="${gi < P.pos ? 'done' : (gi === P.pos ? 'cur' : '')}">${s.moves[mi]}</span>`; mi++; }
+    });
+    html += '</div>';
+  }
+  $('step').innerHTML = html;
+  $('prev').disabled = P.pos === 0; $('next').disabled = P.pos >= N;
+  $('play').textContent = P.playing ? '❚❚ עצור' : '▶ נגן';
+}
+$('next').onclick = () => { P.playing = false; forward(); };
+$('prev').onclick = () => { P.playing = false; backward(); };
+$('play').onclick = () => {
+  P.playing = !P.playing; render();
+  const loop = () => { if (!P.playing) return; const before = P.pos < P.flat.length ? P.flat[P.pos].step : -1;
+    forward(ok => { if (!ok) { P.playing = false; render(); return; } const after = P.pos < P.flat.length ? P.flat[P.pos].step : -1; setTimeout(loop, after !== before ? 1600 : 260); }); };
+  if (P.playing) loop();
+};
+$('solve-home').onclick = () => show('s-home');
+
+/* ============================================================
+   PAYWALL
+   ============================================================ */
+let plan = 'unlimited', session = null;
+function priceOf(p) {
+  const u = Unlock.get();
+  if (p === 'unlimited' && u && u.plan === 'single') return +(CONFIG.prices.unlimited - CONFIG.prices.single).toFixed(2); // upgrade credit
+  return CONFIG.prices[p];
+}
+async function openPaywall() {
+  $('pw-remain').textContent = P.flat.length - P.pos;
+  $('p-single').textContent = CONFIG.prices.single.toFixed(2);
+  const upg = priceOf('unlimited') !== CONFIG.prices.unlimited;
+  $('p-unl').textContent = priceOf('unlimited').toFixed(2); $('p-unl-was').hidden = !upg; $('p-unl-was').textContent = '₪' + CONFIG.prices.unlimited.toFixed(2);
+  $('payerr').textContent = ''; $('pw').classList.add('on'); selectPlan(plan);
+  CONFIG.track('paywall_view', { remain: P.flat.length - P.pos, upgrade: upg });
+  const live = await SmartPayClient.load().catch(() => false);
+  $('devnote').hidden = live; $('cardfields').hidden = !live; $('paybtn').hidden = !live; $('wallets').hidden = !(live && SmartPayClient.canWallet()); $('or').hidden = $('wallets').hidden;
+  if (live) { session = await api('/checkout/session', { plan, cubeId }); await SmartPayClient.mount(session); }
+}
+function selectPlan(p) { plan = p; document.querySelectorAll('.plan').forEach(b => b.classList.toggle('on', b.dataset.plan === p)); $('paytotal').textContent = priceOf(p).toFixed(2); CONFIG.track('plan_select', p); }
+document.querySelectorAll('.plan').forEach(b => b.onclick = () => selectPlan(b.dataset.plan));
+$('pw-close').onclick = () => { $('pw').classList.remove('on'); CONFIG.track('paywall_dismiss'); };
+async function api(path, body) {
+  const r = await fetch(CONFIG.apiBase + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'שגיאת שרת'); return r.json();
+}
+function grant(u) { Unlock.set(u); $('pw').classList.remove('on'); render(); toast('הפתרון נפתח 🎉'); CONFIG.track('pay_success', u.plan); forward(); }
+$('paybtn').onclick = async () => {
+  const btn = $('paybtn'), email = $('email').value.trim();
+  if (!/.+@.+\..+/.test(email)) { $('payerr').textContent = 'צריך אימייל תקין לקבלה.'; return; }
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>מעבד תשלום…'; $('payerr').textContent = '';
+  try {
+    if (!session) session = await api('/checkout/session', { plan, cubeId });
+    const token = await SmartPayClient.tokenize();
+    const res = await api('/checkout/charge', { sessionId: session.id, plan, paymentToken: token, email, cubeId });
+    grant(res.unlock);
+  } catch (e) { $('payerr').textContent = e.message || 'התשלום לא עבר. נסה שוב.'; CONFIG.track('pay_fail', e.message); }
+  btn.disabled = false; btn.innerHTML = `פתח את הפתרון · ₪<span id="paytotal">${priceOf(plan).toFixed(2)}</span>`;
+};
+$('restore').onclick = async () => {
+  const email = $('email').value.trim(); if (!email) { $('payerr').textContent = 'הזן את האימייל שאיתו שילמת.'; return; }
+  try { const res = await api('/restore', { email, cubeId }); grant(res.unlock); } catch (e) { $('payerr').textContent = 'לא נמצאה רכישה לאימייל הזה.'; }
+};
+$('devpay').onclick = () => grant({ plan, cubeId, exp: plan === 'single' ? Date.now() + 7*864e5 : 0, token: 'dev' });
+</script>
+</body>
+</html>
