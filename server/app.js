@@ -20,6 +20,23 @@ export function createApp({store,provider,secret,baseURL,prices={single:7.90,unl
   const seo=createSEO(fs.readFileSync(path.join(root,'index.html'),'utf8'),baseURL);
   app.get('/',(_,res)=>res.type('html').send(seo.html));
   app.get('/index.html',(_,res)=>res.redirect(301,'/'));
+  // This route is deliberately outside the service-worker's cached shell.
+  app.get('/update',(_,res)=>res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex'}).type('html').send(`<!doctype html>
+<html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>עדכון CubeSolve</title></head>
+<body style="font-family:Arial;background:#1c2230;color:white;max-width:520px;margin:40px auto;padding:20px"><h1>עדכון האפליקציה</h1><p>הממשק השמור במכשיר אינו תואם לשרת. העדכון שומר רכישות, קודי שחזור וצבעים שמורים.</p><p>אם כבר סובבת את הקובייה, לאחר העדכון יש להזין את המצב הנוכחי שלה. התקדמות הסיבובים אינה נשמרת.</p><button id="update" style="padding:16px;font-size:18px">עדכן ופתח את CubeSolve</button><p id="status" role="status"></p>
+<script>
+document.getElementById('update').onclick=async function(){
+ this.disabled=true;const status=document.getElementById('status');status.textContent='מעדכן…';
+ try{
+  if('serviceWorker' in navigator){
+   const registrations=await navigator.serviceWorker.getRegistrations();
+   for(const r of registrations){const workers=[r.active,r.waiting,r.installing].filter(Boolean);if(r.scope===new URL('./',location.href).href && workers.some(w=>new URL(w.scriptURL).pathname==='/sw.js'))await r.unregister();}
+  }
+  if('caches' in window){for(const name of await caches.keys())if(name.startsWith('cubesolve-'))await caches.delete(name);}
+  location.replace('/?updated='+Date.now());
+ }catch(error){status.textContent='העדכון לא הושלם. נסה שוב עם חיבור לרשת.';this.disabled=false;}
+};
+</script></body></html>`));
   for(const file of ['cube-core.js','solver-worker.js','payment-client.js','pwa.js','sw.js','manifest.webmanifest']) app.get('/'+file,(_,res)=>{
     if(file==='sw.js')res.set('Cache-Control','no-cache');res.sendFile(path.join(root,file));
   });
@@ -28,7 +45,7 @@ export function createApp({store,provider,secret,baseURL,prices={single:7.90,unl
   app.get('/sitemap.xml',(_,res)=>seo.sitemap?res.type('application/xml').send(seo.sitemap):res.status(503).send('Set PUBLIC_BASE_URL'));
   app.use('/api',(_,res,next)=>{res.set('Cache-Control','no-store');next();});
   app.get('/api/health',(_,res)=>res.json({ok:true,service:'cubesolve-api'}));
-  const config=(_,res)=>res.json({live:provider.configured(),prices,missing:provider.missingConfiguration?.()||[],mode:provider.mode?.()||'unknown'});
+  const config=(_,res)=>res.json({live:provider.configured(),prices,missing:provider.missingConfiguration?.()||[],mode:provider.mode?.()||'unknown',clientVersion:2,updateURL:'/update'});
   app.get('/api/config',config);app.post('/api/config',config);
   const wrap=fn=>(req,res,next)=>Promise.resolve().then(()=>fn(req,res)).catch(next);
   // Bound expensive requests. Do not trust arbitrary X-Forwarded-For headers.
@@ -66,6 +83,7 @@ export function createApp({store,provider,secret,baseURL,prices={single:7.90,unl
     const {plan,state,token}=req.body||{},email=normalize(req.body?.email);
     if(!Object.hasOwn(prices,plan))throw fail(400,'תוכנית לא מוכרת');
     if(!validEmail(email))throw fail(400,'נדרש אימייל תקין');
+    if(!Object.hasOwn(req.body||{},'state'))throw Object.assign(fail(426,'האפליקציה במכשיר אינה מעודכנת. אין בעיה בצבעים: פתח את כתובת האתר עם ‎/update בסוף כדי לעדכן, ואז נסה שוב.'),{code:'CLIENT_UPDATE_REQUIRED'});
     validState(state);if(!provider.configured())throw fail(503,'הסליקה אינה מוגדרת בשרת');
     const prior=authorize(token),credit=plan==='unlimited'&&prior?.purchase.email===email&&prior.unlock.plan==='single';
     const amount=+(prices[plan]-(credit?prices.single:0)).toFixed(2),agorot=Math.round(amount*100),id=crypto.randomUUID();

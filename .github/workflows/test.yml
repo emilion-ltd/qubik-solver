@@ -26,3 +26,6 @@ jobs:
         env:
           NODE_PATH: /tmp/cube-browser/node_modules
       - run: docker build -t cubesolve-ci .
+      - run: node tests/update-browser.cjs
+        env:
+          NODE_PATH: /tmp/cube-browser/node_modules

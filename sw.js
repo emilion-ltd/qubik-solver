@@ -1,4 +1,4 @@
-const CACHE = 'cubesolve-v4';
+const CACHE = 'cubesolve-v5';
 const ASSETS = ['./','./index.html','./cube-core.js','./solver-worker.js','./pwa.js','./payment-client.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
 const urls = ASSETS.map(p => new URL(p, self.registration.scope).href);
 self.addEventListener('install', event => {

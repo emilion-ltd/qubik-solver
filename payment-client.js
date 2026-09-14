@@ -13,7 +13,13 @@ async function api(path,body){
   if(r.status===404)throw new Error('שרת התשלומים אינו מחובר לאתר (404). יש להפעיל את שרת האפליקציה.');
   const data=await r.json().catch(()=>null);
   if(!data)throw new Error('האתר לא החזיר תשובת API תקינה. יש לבדוק את פריסת השרת.');
-  if(!r.ok)throw new Error(data.error||'לא ניתן להשלים את הבקשה כרגע.');return data;
+  if(!r.ok){
+    if(data.code==='CLIENT_UPDATE_REQUIRED'){
+      let link=document.getElementById('payment-update');
+      if(!link){link=document.createElement('a');link.id='payment-update';link.href='/update';link.className='btn';link.textContent='עדכן את האפליקציה';document.getElementById('payerr').after(link);}
+    }
+    throw Object.assign(new Error(data.error||'לא ניתן להשלים את הבקשה כרגע.'),{code:data.code,status:r.status});
+  }return data;
 }
 function showCredential(u){
   $('purchase-access').hidden=false;
@@ -69,7 +75,7 @@ $('paybtn').onclick=async()=>{
   if(!P.initial){$('payerr').textContent='יש להזין קובייה לפני רכישת פתרון.';return;}
   const btn=$('paybtn');btn.disabled=true;$('payerr').textContent='פותח דף תשלום…';
   try{
-    session=await api('/checkout/session',{plan,state:P.initial,email,token:credential()?.token});
+    session=await api('/checkout/session',{clientVersion:2,plan,state:P.initial,email,token:credential()?.token});
     try{localStorage.setItem('cube_checkout',JSON.stringify({id:session.id}));}catch{}
     $('payframe').src=session.payUrl;$('external-checkout').href=session.payUrl;$('payframe-wrap').hidden=false;btn.hidden=true;
     $('payerr').textContent='הסכום לתשלום: ₪'+session.amount.toFixed(2);

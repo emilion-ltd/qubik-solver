@@ -21,6 +21,13 @@ async function fixture(){
 test('payment confirmation, access control, restore and persistent purchase',async()=>{
  const f=await fixture();try{
   const config=await f.post('/config',{});assert.equal(config.body.live,true);
+  const legacy=await f.post('/checkout/session',{plan:'unlimited',cubeId:'old-id',email:'buyer@example.com'});
+  assert.equal(legacy.status,426);assert.equal(legacy.body.code,'CLIENT_UPDATE_REQUIRED');assert.equal(f.orders.length,0);
+  const invalid=await f.post('/checkout/session',{plan:'single',state:Array(54).fill('W'),email:'buyer@example.com'});
+  assert.equal(invalid.status,400);assert.equal(f.orders.length,0);
+  const update=await fetch(f.base+'/update');assert.equal(update.status,200);assert.equal(update.headers.get('cache-control'),'no-store');
+  const updateHTML=await update.text();assert.ok(updateHTML.includes('caches.delete'));assert.ok(!updateHTML.includes('localStorage.clear'));
+
   assert.equal((await fetch(f.base+'/api/health')).status,200);
   assert.equal((await fetch(f.base+'/server/cube-engine.cjs')).status,404);
   const checkout=await f.post('/checkout/session',{plan:'single',state,email:' Buyer@Example.com '});assert.equal(checkout.status,200);

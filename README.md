@@ -93,3 +93,9 @@ DATA_DIR=/data
 בדיקות: `npm test --prefix server`, `node tests/browser.cjs`, `node tests/payment-browser.cjs` (שתי האחרונות דורשות Playwright ו־Chromium). בדיקות התשלום משתמשות בספק מדומה לפי חוזה SmartPay; הן אינן מחייבות כרטיס ואינן מחליפות עסקת בדיקה בחשבון הסליקה האמיתי. אין תמיכה אוטומטית בביטול הרשאה בעקבות החזר כספי.
 
 תיעוד הספק ששימש לאימות: https://docs.starltd.net/smartpay/guides/checkout-pages/ ו־https://docs.starltd.net/smartpay/guides/charges/
+
+
+### שגיאת צבעים במסך התשלום אחרי שדרוג
+אם מוצג המסך הישן עם מספר הסיבובים שנותרו, ייתכן שה־PWA שמר גרסה קודמת ששולחת רק cubeId. השרת מחזיר מעתה HTTP 426 ו־CLIENT_UPDATE_REQUIRED כאשר שדה state חסר; קובייה שנשלחה אך אינה תקינה עדיין נדחית ב־400. אין לדלג על אימות קובייה כדי לקבל תשלום.
+
+פתח `/update` באותו דומיין ולחץ על עדכון. הנתיב אינו נשמר ב־Service Worker, מסיר רק את מטמון CubeSolve והרישום של sw.js לאפליקציה, ואינו מוחק localStorage, רכישות או קודי שחזור. לאחר סיבובים פיזיים יש להזין את מצב הקובייה הנוכחי מחדש.
