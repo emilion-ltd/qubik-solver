@@ -40,8 +40,8 @@
   /* scan */
   .cam{position:relative;width:100%;aspect-ratio:3/4;background:#000;border-radius:18px;overflow:hidden}
   .cam video{width:100%;height:100%;object-fit:cover;display:block}
-  .grid{position:absolute;left:50%;top:50%;width:66%;aspect-ratio:1;transform:translate(-50%,-50%);display:grid;grid-template-columns:repeat(3,1fr);gap:4%;pointer-events:none}
-  .grid i{display:block;border:2px solid rgba(255,255,255,.85);border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,.25)}
+  .grid{position:absolute;left:50%;top:50%;width:66%;aspect-ratio:1;transform:translate(-50%,-50%);display:grid;grid-template-columns:repeat(3,1fr);gap:4%;pointer-events:none;border-radius:14px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
+  .grid i{display:block;border:2px solid rgba(255,255,255,.85);border-radius:8px}
   .grid i:nth-child(5){border-color:var(--accent)}
   .cam .msg{position:absolute;inset:auto 0 0 0;padding:10px;background:linear-gradient(transparent,rgba(0,0,0,.7));font-size:14px;text-align:center}
   .dots{display:flex;gap:6px;justify-content:center;margin:10px 0 4px}
@@ -448,12 +448,31 @@ const SCAN_ORDER = [
 ];
 const FACE_OFFSET = { U:0, R:9, F:18, D:27, L:36, B:45 };
 let scanIdx = 0, samples = {}; // face -> [9 x [r,g,b]]
-let stream = null;
+let stream = null, liveTimer = null, warnFace = -1;
 
+// color features: chromaticity + saturation + brightness — robust-ish to lighting
+const feat = ([r, g, b]) => {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), s = r + g + b + 1e-6;
+  return [r/s*3, g/s*3, b/s*3, (mx ? (mx - mn) / mx : 0) * 1.2, mx/255 * 0.8];
+};
+const dist = (a, b) => { const fa = feat(a), fb = feat(b); return fa.reduce((t, x, i) => t + (x - fb[i]) ** 2, 0); };
+// rough canonical colors, only for "did you photograph the right face?" sanity checks
+const ANCHOR = { W:[235,235,235], Y:[235,205,40], G:[30,150,80], B:[35,85,190], R:[190,35,45], O:[235,120,35] };
+
+function startLivePreview() {
+  const cells = document.querySelectorAll('#s-scan .grid i');
+  liveTimer = setInterval(() => {
+    const s = sampleFace(); if (!s) return;
+    s.forEach((rgb, i) => { if (cells[i]) cells[i].style.background = `rgba(${rgb.map(Math.round).join(',')},.55)`; });
+    const bright = s.reduce((t, c) => t + Math.max(...c), 0) / 9;
+    $('cammsg').textContent = bright < 55 ? 'חשוך מדי — קרב את הקוביה לאור' : 'מלא את הריבועים עם הפאה. הריבועים מראים את הצבע שזוהה';
+  }, 250);
+}
 async function startCamera() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
     $('video').srcObject = stream; $('cammsg').textContent = 'מלא את הריבועים עם הפאה, והחזק ישר';
+    startLivePreview();
     return true;
   } catch (e) {
     const why = e && e.name === 'NotAllowedError' ? 'הדפדפן חסם — צריך לאשר גישה למצלמה'
@@ -465,7 +484,11 @@ async function startCamera() {
     return false;
   }
 }
-function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
+function stopCamera() {
+  if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+  document.querySelectorAll('#s-scan .grid i').forEach(c => c.style.background = '');
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+}
 function renderScanUI() {
   const d = $('dots'); d.innerHTML = '';
   SCAN_ORDER.forEach((s, i) => { const sp = document.createElement('span'); sp.textContent = i + 1; sp.className = i < scanIdx ? 'done' : (i === scanIdx ? 'cur' : ''); d.appendChild(sp); });
@@ -494,8 +517,6 @@ function sampleFace() {
 function classify() {
   // reference = the 6 sampled centers; assign greedily so every color is used exactly 9 times
   const refs = SCAN_ORDER.map(s => ({ color: s.center, rgb: samples[s.face][4] }));
-  const feat = ([r,g,b]) => { const s = r + g + b + 1e-6, v = Math.max(r,g,b) / 255; return [r/s*3, g/s*3, b/s*3, v*0.6]; };
-  const dist = (a, b) => { const fa = feat(a), fb = feat(b); return fa.reduce((t, x, i) => t + (x - fb[i]) ** 2, 0); };
   const all = [];
   for (const s of SCAN_ORDER) samples[s.face].forEach((rgb, i) => refs.forEach(ref => all.push({ idx: FACE_OFFSET[s.face] + i, color: ref.color, d: dist(rgb, ref.rgb) })));
   all.sort((a, b) => a.d - b.d);
@@ -504,10 +525,23 @@ function classify() {
   facelets = assigned.map(c => c || '?');
   SCAN_ORDER.forEach(s => facelets[FACE_OFFSET[s.face] + 4] = s.center);
 }
-$('go-scan').onclick = async () => { scanIdx = 0; samples = {}; show('s-scan'); renderScanUI(); await startCamera(); };
+// non-blocking sanity check: warn once, a second tap on the same face accepts anyway
+function snapProblem(s) {
+  const bright = s.reduce((t, c) => t + Math.max(...c), 0) / 9;
+  if (bright < 55) return 'חשוך מדי — קרב את הקוביה לאור';
+  const expected = SCAN_ORDER[scanIdx].center;
+  const ranked = Object.keys(ANCHOR).sort((a, b) => dist(s[4], ANCHOR[a]) - dist(s[4], ANCHOR[b]));
+  const dBest = dist(s[4], ANCHOR[ranked[0]]), dExp = dist(s[4], ANCHOR[expected]);
+  if (ranked[0] !== expected && dExp > dBest * 1.6 + 0.02) return `המרכז לא נראה ${HEB[expected]} אלא ${HEB[ranked[0]]} — בדוק את האחיזה`;
+  return null;
+}
+$('go-scan').onclick = async () => { scanIdx = 0; samples = {}; warnFace = -1; show('s-scan'); renderScanUI(); await startCamera(); };
 $('snap').onclick = () => {
   const s = sampleFace();
   if (!s) { toast('המצלמה עדיין לא מוכנה'); return; }
+  const warn = snapProblem(s);
+  if (warn && warnFace !== scanIdx) { warnFace = scanIdx; toast(warn + '. לחץ שוב כדי לצלם בכל זאת'); CONFIG.track('scan_warn', warn); return; }
+  warnFace = -1;
   samples[SCAN_ORDER[scanIdx].face] = s;
   CONFIG.track('scan_face', scanIdx);
   if (scanIdx < 5) { scanIdx++; renderScanUI(); }
