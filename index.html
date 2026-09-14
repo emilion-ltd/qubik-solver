@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1c2230">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%A9%3C/text%3E%3C/svg%3E">
 <title>CubeSolve — צלם, ותפתור</title>
@@ -124,10 +124,20 @@
   .spin{display:inline-block;width:16px;height:16px;border:2px solid #1c2230;border-top-color:transparent;border-radius:50%;animation:sp .8s linear infinite;vertical-align:middle;margin-inline-end:6px}
   @keyframes sp{to{transform:rotate(360deg)}}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ok);color:#0c1a10;padding:10px 16px;border-radius:999px;font-weight:700;display:none;z-index:60}
+  .nf i:focus-visible { outline:3px solid white; }
+  @media (prefers-reduced-motion: reduce) { .nf i.diag { animation:none; } }
 </style>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="CubeSolve">
+<script src="./pwa.js" defer></script>
 </head>
 <body>
 
+<div class="card" id="pwa-status" role="status" hidden></div>
+<button class="btn" id="install-app" hidden>התקן את CubeSolve</button>
+<button class="btn" id="update-app" hidden>גרסה חדשה זמינה — עדכן בסיום הפתרון</button>
 <!-- ================= HOME ================= -->
 <section class="screen on" id="s-home">
   <div class="hero">
@@ -168,7 +178,7 @@
   <div class="net" id="net"></div>
   <div class="palette" id="palette"></div>
   <div class="counts" id="counts"></div>
-  <div class="errs" id="errs"></div>
+  <div class="errs" id="errs" role="status" aria-live="polite"></div>
   <button class="btn primary" id="solve-btn">חשב פתרון</button>
   <div class="row"><button class="btn ghost" id="rescan">צלם מחדש</button><button class="btn ghost" id="review-home">חזרה</button></div>
 </section>
@@ -216,274 +226,7 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script>// cube-core.js — cube model, validation and layer-by-layer solver (client side, no server needed)
-const CubeCore = (() => {
-  // ---------- geometry: x right, y up, z toward viewer ----------
-  const POS = [], INDEX = new Map();
-  const key = (p, n) => p.join(',') + '|' + n.join(',');
-  for (let f = 0; f < 6; f++) for (let i = 0; i < 9; i++) {
-    const r = Math.floor(i / 3), c = i % 3; let p, n;
-    if (f === 0) { p = [-1 + c, 1, -1 + r]; n = [0, 1, 0]; }
-    else if (f === 1) { p = [1, 1 - r, 1 - c]; n = [1, 0, 0]; }
-    else if (f === 2) { p = [-1 + c, 1 - r, 1]; n = [0, 0, 1]; }
-    else if (f === 3) { p = [-1 + c, -1, 1 - r]; n = [0, -1, 0]; }
-    else if (f === 4) { p = [-1, 1 - r, -1 + c]; n = [-1, 0, 0]; }
-    else { p = [1 - c, 1 - r, -1]; n = [0, 0, -1]; }
-    POS.push({ p, n }); INDEX.set(key(p, n), POS.length - 1);
-  }
-  function rot(v, axis, k) {
-    let [x, y, z] = v;
-    for (let i = 0; i < ((k % 4) + 4) % 4; i++) {
-      if (axis === 0) [x, y, z] = [x, -z, y];
-      else if (axis === 1) [x, y, z] = [z, y, -x];
-      else [x, y, z] = [-y, x, z];
-    }
-    return [x, y, z];
-  }
-  const FACE_AXIS = { U: [1, 1], D: [1, -1], R: [0, 1], L: [0, -1], F: [2, 1], B: [2, -1] };
-  function permFor(axis, sign, k, whole) {
-    const perm = Array.from({ length: 54 }, (_, i) => i);
-    POS.forEach(({ p, n }, i) => {
-      if (whole || p[axis] === sign) perm[INDEX.get(key(rot(p, axis, k), rot(n, axis, k)))] = i;
-    });
-    return perm;
-  }
-  const MOVES = {};
-  for (const f in FACE_AXIS) {
-    const [a, s] = FACE_AXIS[f];
-    MOVES[f] = permFor(a, s, -s); MOVES[f + "'"] = permFor(a, s, s); MOVES[f + '2'] = permFor(a, s, 2);
-  }
-  const compose = (p1, p2) => p2.map(j => p1[j]);
-  const algPerm = alg => alg.split(/\s+/).filter(Boolean).reduce((p, m) => compose(p, MOVES[m]), Array.from({ length: 54 }, (_, i) => i));
-  function apply(s, perm) { const o = new Array(54); for (let j = 0; j < 54; j++) o[j] = s[perm[j]]; return o; }
-  const inverse = m => m.endsWith("'") ? m[0] : (m.endsWith('2') ? m : m + "'");
-  const faceOf = i => Math.floor(i / 9);
-  const stickersAt = p => { const out = []; POS.forEach(({ p: q }, i) => { if (q[0] === p[0] && q[1] === p[1] && q[2] === p[2]) out.push(i); }); return out; };
-
-  // ---------- validation ----------
-  function centers(s) { return [s[4], s[13], s[22], s[31], s[40], s[49]]; }
-  function validate(s) {
-    // s: array of 54 color chars
-    const errs = [];
-    const heb = c => HEB[c] || c;
-    const cnt = {}; s.forEach(c => cnt[c] = (cnt[c] || 0) + 1);
-    const C = centers(s);
-    if (new Set(C).size !== 6) errs.push('שישה מרכזים חייבים להיות בצבעים שונים');
-    for (const c of C) if (cnt[c] !== 9) errs.push(`הצבע ה${heb(c)} מופיע ${cnt[c] || 0} פעמים במקום 9`);
-    if (errs.length) return errs;
-    // piece sets
-    const want = new Set(), got = new Set();
-    for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
-      const idx = stickersAt([x, y, z]); if (idx.length < 2) continue;
-      want.add(idx.map(i => C[faceOf(i)]).sort().join(''));
-      got.add(idx.map(i => s[i]).sort().join(''));
-    }
-    for (const w of want) if (!got.has(w)) errs.push('חסרה חתיכה: ' + w.split('').map(heb).join('-'));
-    if (errs.length) errs.push('בדרך כלל זה קורה כשפאה שלמה הוזנה מסובבת או בהיפוך — בדוק במיוחד את הפאה האחורית, העליונה והתחתונה מול סדר הצילום.');
-    return errs;
-  }
-
-  // ---------- diagnosis ----------
-  // Every piece is present (validate() passed) but the cube still isn't solvable.
-  // That only happens if someone physically pulled a piece out and put it back
-  // wrong — a single twisted corner, flipped edge, or two same-type pieces
-  // swapped — never from turning the cube. Pinpoint exactly which piece(s) and
-  // what they should show; null means the mess doesn't match one clean pattern.
-  function diagnosePieceDefect(s) {
-    const C = centers(s);
-    const dirLabel = n => n[1] === 1 ? 'למעלה' : n[1] === -1 ? 'למטה' : n[2] === 1 ? 'קדימה' : n[2] === -1 ? 'אחורה' : n[0] === 1 ? 'ימינה' : 'שמאלה';
-    const name = c => HEB[c] || c;
-    const label = colors => colors.map(name).join('-');
-    const describe = inf => inf.idx.map((i, k) => `${dirLabel(POS[i].n)}: ${name(inf.target[k])}`).join(' · ');
-
-    function analyze(positions) {
-      const info = positions.map(p => {
-        const idx = stickersAt(p);
-        const target = idx.map(i => C[faceOf(i)]);
-        const actual = idx.map(i => s[i]);
-        return { idx, target, actual, targetSet: target.slice().sort().join(''), actualSet: actual.slice().sort().join('') };
-      });
-      const homeOf = info.map(inf => info.findIndex(h => h.targetSet === inf.actualSet));
-      return { info, homeOf };
-    }
-    function cyclesOf(perm) {
-      const seen = new Array(perm.length).fill(false), out = [];
-      for (let i = 0; i < perm.length; i++) {
-        if (seen[i]) continue;
-        if (perm[i] === -1) return null;   // shouldn't happen once validate() passed
-        if (perm[i] === i) { seen[i] = true; continue; }
-        const c = []; let j = i;
-        while (!seen[j]) { seen[j] = true; c.push(j); j = perm[j]; }
-        out.push(c);
-      }
-      return out;
-    }
-
-    const CORNER_POS = []; for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) CORNER_POS.push([x, y, z]);
-    const EDGE_POS = [];
-    for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) for (const z of [-1, 0, 1])
-      if ((x === 0) + (y === 0) + (z === 0) === 1) EDGE_POS.push([x, y, z]);
-
-    const corner = analyze(CORNER_POS), edge = analyze(EDGE_POS);
-    const cCycles = cyclesOf(corner.homeOf), eCycles = cyclesOf(edge.homeOf);
-    if (!cCycles || !eCycles) return null;
-
-    if (!cCycles.length && !eCycles.length) {
-      // every piece is in its own slot — any leftover mismatch is pure orientation
-      const twisted = corner.info.filter(inf => inf.actual.join('') !== inf.target.join(''));
-      const flipped = edge.info.filter(inf => inf.actual.join('') !== inf.target.join(''));
-      if (twisted.length === 1 && !flipped.length) {
-        const inf = twisted[0];
-        return { kind: 'corner-twist', idx: inf.idx, fix: inf.target,
-          text: `פינה אחת סובבה במקומה — זה לא קורה מסיבוב חוקי של הקוביה, מישהו כנראה שלף אותה והחזיר אותה מסובבת. מצאתי אותה (מסומנת ברשת למטה): הפינה עם הצבעים ${label(inf.actual)}. שלוף אותה בעדינות (סובב שכבה סמוכה ב-45° כדי לפנות מקום) והחזר אותה כך שהיא תשב עם ${describe(inf)}.` };
-      }
-      if (flipped.length === 1 && !twisted.length) {
-        const inf = flipped[0];
-        return { kind: 'edge-flip', idx: inf.idx, fix: inf.target,
-          text: `קצה אחד התהפך במקומו — סימן שמישהו שלף אותו והחזיר אותו הפוך. מצאתי אותו (מסומן ברשת למטה): הקצה עם הצבעים ${label(inf.actual)}. שלוף אותו בעדינות והחזר אותו הפוך, כך שהוא יישב עם ${describe(inf)}.` };
-      }
-      return null;
-    }
-
-    const cleanApartFrom = (piece, cycles) => {
-      const inCycle = new Set(cycles.flat());
-      return piece.info.every((inf, i) => inCycle.has(i) || inf.actual.join('') === inf.target.join(''));
-    };
-    if (cCycles.length === 1 && cCycles[0].length === 2 && !eCycles.length && cleanApartFrom(corner, cCycles) && cleanApartFrom(edge, [])) {
-      const [a, b] = cCycles[0], pa = corner.info[a], pb = corner.info[b];
-      return { kind: 'corner-swap', idx: pa.idx.concat(pb.idx), fix: pa.target.concat(pb.target),
-        text: `שתי פינות הוחלפו ביניהן במקום (מסומנות ברשת למטה) — הפינה עם הצבעים ${label(pa.actual)} והפינה עם הצבעים ${label(pb.actual)}. שלוף את שתיהן והחלף ביניהן: כל פינה כמות שהיא, בלי לסובב אותה.` };
-    }
-    if (eCycles.length === 1 && eCycles[0].length === 2 && !cCycles.length && cleanApartFrom(edge, eCycles) && cleanApartFrom(corner, [])) {
-      const [a, b] = eCycles[0], pa = edge.info[a], pb = edge.info[b];
-      return { kind: 'edge-swap', idx: pa.idx.concat(pb.idx), fix: pa.target.concat(pb.target),
-        text: `שני קצוות הוחלפו ביניהם במקום (מסומנים ברשת למטה) — הקצה עם הצבעים ${label(pa.actual)} והקצה עם הצבעים ${label(pb.actual)}. שלוף את שניהם והחלף ביניהם.` };
-    }
-    return null;
-  }
-
-  // ---------- solver ----------
-  const ROT = { F: 'R', R: 'B', B: 'L', L: 'F', U: 'U', D: 'D' };
-  const rotateAlg = (alg, k) => { for (let i = 0; i < k; i++) alg = alg.split(' ').map(m => ROT[m[0]] + m.slice(1)).join(' '); return alg; };
-  const macro = (label, alg, group) => ({ label, alg, group, perm: algPerm(alg), moves: alg.split(' ') });
-  const U_MACROS = [macro('U', 'U', 'U'), macro("U'", "U'", 'U'), macro('U2', 'U2', 'U')];
-  const BASIC = Object.keys(MOVES).map(m => macro(m, m, m[0]));
-
-  function makeGoal(pairs) { return s => { for (const [i, c] of pairs) if (s[i] !== c) return false; return true; }; }
-
-  function dfsFirst(s, macros, goal, depth, path, last) {
-    if (goal(s)) return path;
-    if (depth === 0) return null;
-    for (const m of macros) {
-      if (last && m.group === last.group) continue;
-      const r = dfsFirst(apply(s, m.perm), macros, goal, depth - 1, path.concat(m), m);
-      if (r) return r;
-    }
-    return null;
-  }
-  function dfsAll(s, macros, goal, depth, path, last, out) {
-    if (goal(s)) { out.push(path); return; }
-    if (depth === 0) return;
-    for (const m of macros) {
-      if (last && m.group === last.group && m.group === 'U') continue;
-      dfsAll(apply(s, m.perm), macros, goal, depth - 1, path.concat(m), m, out);
-    }
-  }
-  function search(s, macros, goal, depth) {
-    if (macros === BASIC) return dfsFirst(s, macros, goal, depth, [], null);
-    const out = []; dfsAll(s, macros, goal, depth, [], null, out);
-    if (!out.length) return null;
-    return out.reduce((a, b) => (b.reduce((n, m) => n + m.moves.length, 0) < a.reduce((n, m) => n + m.moves.length, 0) ? b : a));
-  }
-  function solveGoal(s, goal, macros, maxd) {
-    for (let d = 0; d <= maxd; d++) { const r = search(s, macros, goal, d); if (r) return r; }
-    return null;
-  }
-
-  const HEB = { W: 'לבן', Y: 'צהוב', G: 'ירוק', B: 'כחול', R: 'אדום', O: 'כתום' };
-
-  function solve(initial, opts = {}) {
-    // initial: 54 chars, any color letters; returns {steps:[{phase,title,desc,alg,moves}]} or {error}
-    let s = initial.slice();
-    const C = centers(s);
-    const colorName = c => HEB[c] || c;
-    const pairsFor = positions => { const out = []; for (const p of positions) for (const i of stickersAt(p)) out.push([i, C[faceOf(i)]]); return out; };
-    const pieceName = p => stickersAt(p).map(i => C[faceOf(i)]).sort((a, b) => 'WYGBRO'.indexOf(a) - 'WYGBRO'.indexOf(b)).map(colorName).join('-');
-    const steps = [];
-    const record = (phase, title, desc, algs) => steps.push({ phase, title, desc, alg: algs.map(m => m.label).join(' , '), moves: algs.flatMap(m => m.moves) });
-    const done = [];
-    function solvePieces(positions, macros, maxd, phase, title, descFn) {
-      let remaining = positions.slice();
-      while (remaining.length) {
-        let found = null;
-        for (let d = 0; d <= maxd && !found; d++) for (const p of remaining) {
-          const r = search(s, macros, makeGoal(pairsFor(done.concat([p]))), d);
-          if (r) { found = [p, r]; break; }
-        }
-        if (!found) throw new Error('phase ' + phase);
-        const [p, r] = found;
-        for (const m of r) s = apply(s, m.perm);
-        record(phase, title, descFn(p), r);
-        done.push(p); remaining = remaining.filter(q => q !== p);
-      }
-    }
-    try {
-      // 1. white (D) cross
-      solvePieces([[0, -1, 1], [1, -1, 0], [0, -1, -1], [-1, -1, 0]], BASIC, 6, 1, 'הצלב ה' + colorName(C[3]),
-        p => `הכנס את הקצה ${pieceName(p)} למקומו: ${colorName(C[3])} למטה, והצבע השני מול המרכז שלו.`);
-      // 2. D corners
-      const cm = U_MACROS.slice();
-      for (let k = 0; k < 4; k++) {
-        const base = rotateAlg("R U R' U'", k);
-        for (let n = 1; n <= 5; n++) cm.push(macro('(' + base + ')×' + n, Array(n).fill(base).join(' '), 'slot' + k));
-        const alt = rotateAlg("R U2 R' U' R U R'", k); cm.push(macro(alt, alt, 'slot' + k));
-      }
-      solvePieces([[1, -1, 1], [-1, -1, 1], [1, -1, -1], [-1, -1, -1]], cm, 3, 2, 'פינות השכבה הראשונה',
-        p => `הכנס את הפינה ${pieceName(p)} למקומה: מביאים אותה מעל המקום שלה ומבצעים R U R' U' עד שהיא נכנסת (או הגרסה הקצרה R U2 R' U' R U R' כשהצבע התחתון פונה למעלה). האותיות משתנות לפי הפינה כי ממשיכים להחזיק את הקוביה באותה אחיזה.`);
-      // 3. middle layer
-      const mm = U_MACROS.slice();
-      for (let k = 0; k < 4; k++) {
-        const r = rotateAlg("U R U' R' U' F' U F", k), l = rotateAlg("U' L' U L U F U' F'", k);
-        mm.push(macro('הכנסה ימינה: ' + r, r, 'mid' + k)); mm.push(macro('הכנסה שמאלה: ' + l, l, 'mid' + k));
-      }
-      solvePieces([[1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1]], mm, 3, 3, 'השכבה השנייה',
-        p => `הכנס את הקצה ${pieceName(p)} למקומו בשכבה האמצעית: קודם מיישרים אותו למעלה מול המרכז התואם, ואז אלגוריתם הכנסה ימינה (U R U' R' U' F' U F) או שמאלה (U' L' U L U F U' F'), עם האותיות מותאמות לפאה שמולה עומד הקצה.`);
-      // 4. top cross (orientation)
-      const topEdges = [], topCorners = [];
-      POS.forEach(({ p, n }, i) => { if (n[1] === 1) { if ((p[0] === 0) !== (p[2] === 0)) topEdges.push(i); else if (p[0] !== 0 && p[2] !== 0) topCorners.push(i); } });
-      const top = colorName(C[0]);
-      let r = solveGoal(s, st => topEdges.every(i => st[i] === C[0]), U_MACROS.concat([macro("F R U R' U' F'", "F R U R' U' F'", 'yc')]), 5);
-      if (!r) throw new Error('phase 4');
-      for (const m of r) s = apply(s, m.perm);
-      if (r.length) record(4, 'הצלב ה' + top, `האלגוריתם F R U R' U' F' הופך קצוות ${top}ים כלפי מעלה. חוזרים עליו (עם סיבובי U ביניהם לכיוון הצורה) עד שנוצר צלב.`, r);
-      // 5. top face
-      r = solveGoal(s, st => topCorners.every(i => st[i] === C[0]), U_MACROS.concat([macro("R U R' U R U2 R'", "R U R' U R U2 R'", 'sune')]), 6);
-      if (!r) throw new Error('phase 5');
-      for (const m of r) s = apply(s, m.perm);
-      if (r.length) record(5, 'הפאה ה' + top + 'ה', `האלגוריתם R U R' U R U2 R' (Sune) מסובב פינות. חוזרים עליו, עם סיבובי U ביניהם, עד שכל הפאה העליונה ${top}ה.`, r);
-      // 6. corner permutation (up to U)
-      const cornerGoal = makeGoal(pairsFor([[1, 1, 1], [-1, 1, 1], [1, 1, -1], [-1, 1, -1]]));
-      const placed = st => { for (let k = 0; k < 4; k++) { if (cornerGoal(st)) return true; st = apply(st, MOVES.U); } return false; };
-      r = solveGoal(s, placed, U_MACROS.concat([macro("R' F R' B2 R F' R' B2 R2", "R' F R' B2 R F' R' B2 R2", 'cp'), macro("R2 B2 R F R' B2 R F' R", "R2 B2 R F R' B2 R F' R", 'cp')]), 6);
-      if (!r) throw new Error('phase 6');
-      for (const m of r) s = apply(s, m.perm);
-      if (r.length) record(6, 'סידור הפינות העליונות', `האלגוריתם R' F R' B2 R F' R' B2 R2 מסובב שלוש פינות עליונות במעגל בלי לקלקל את הפאה העליונה (הגרסה ההפוכה: R2 B2 R F R' B2 R F' R). אחריו כל פינה יושבת בין שני הצבעים שלה.`, r);
-      // 7. edges + final U
-      const solvedGoal = makeGoal(Array.from({ length: 54 }, (_, i) => [i, C[faceOf(i)]]));
-      r = solveGoal(s, solvedGoal, U_MACROS.concat([macro("F2 U L R' F2 L' R U F2", "F2 U L R' F2 L' R U F2", 'ep'), macro("F2 U' L R' F2 L' R U' F2", "F2 U' L R' F2 L' R U' F2", 'ep')]), 6);
-      if (!r) throw new Error('phase 7');
-      for (const m of r) s = apply(s, m.perm);
-      if (r.length) record(7, 'סידור הקצוות העליונים', `האלגוריתם F2 U L R' F2 L' R U F2 מסובב שלושה קצוות עליונים במעגל (הגרסה עם U' בכיוון ההפוך). אחריו נשאר רק ליישר את השכבה העליונה.`, r);
-      return { steps, total: steps.reduce((n, st) => n + st.moves.length, 0) };
-    } catch (e) {
-      return { error: 'המצב שהוזן לא ניתן לפתרון — בדרך כלל מדבקה אחת או שתיים זוהו לא נכון (הצבעים הדומים: אדום/כתום, לבן/צהוב). השווה את התרשים לקוביה שלך ותקן את המשבצות השגויות, או צלם מחדש בתאורה טובה.' };
-    }
-  }
-
-  return { POS, INDEX, MOVES, FACE_AXIS, apply, algPerm, inverse, validate, solve, diagnose: diagnosePieceDefect, centers, key };
-})();
-
-</script>
+<script src="./cube-core.js"></script>
 <script>
 /* ============================================================
    CONFIG
@@ -513,7 +256,10 @@ const COLORS = ['W','Y','G','B','R','O'];
 const HEB = { W:'לבן', Y:'צהוב', G:'ירוק', B:'כחול', R:'אדום', O:'כתום' };
 let facelets = new Array(54).fill('?');
 let cubeId = '';
-function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0,0); }
+function show(id) {
+  if (id !== 's-solve') P.playing = false;
+  if (id !== 's-review' && activeSolve) { activeSolve(); activeSolve = null; }
+ document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0,0); }
 function toast(t) { const e = $('toast'); e.textContent = t; e.style.display = 'block'; setTimeout(() => e.style.display = 'none', 2200); }
 const hash = str => { let h = 5381; for (const c of str) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0; return h.toString(36); };
 
@@ -692,7 +438,12 @@ function buildNet() {
     box.style.gridColumn = NET_POS[f][0] + 1; box.style.gridRow = NET_POS[f][1] + 1;
     for (let i = 0; i < 9; i++) {
       const c = document.createElement('i'); const idx = fi * 9 + i; netCells[idx] = c;
-      if (i === 4) c.classList.add('center'); else c.onclick = () => { facelets[idx] = paint; paintNet(); };
+      c.setAttribute('aria-label', NET_LBL[f] + ' משבצת ' + (i+1));
+      if (i === 4) c.classList.add('center'); else {
+        c.tabIndex = 0; c.setAttribute('role','button');
+        c.onclick = () => { facelets[idx] = paint; paintNet(); };
+        c.onkeydown = e => { if(e.key==='Enter'||e.key===' ') { e.preventDefault(); c.click(); } };
+      }
       box.appendChild(c);
     }
     const l = document.createElement('div'); l.className = 'lbl'; l.textContent = NET_LBL[f]; box.appendChild(l);
@@ -702,6 +453,7 @@ function buildNet() {
   COLORS.forEach(c => { const b = document.createElement('button'); b.className = c + (c === paint ? ' on' : ''); b.title = HEB[c]; b.onclick = () => { paint = c; [...pal.children].forEach(x => x.classList.toggle('on', x === b)); }; pal.appendChild(b); });
 }
 function paintNet() {
+  try { localStorage.setItem('cubesolve-draft', JSON.stringify(facelets)); } catch (_) {}
   netCells.forEach((c, i) => { c.className = (i % 9 === 4 ? 'center ' : '') + (facelets[i] === '?' ? 'q' : facelets[i]); });
   const cnt = {}; facelets.forEach(c => cnt[c] = (cnt[c] || 0) + 1);
   $('counts').innerHTML = COLORS.map(c => `<span class="${(cnt[c]||0) === 9 ? '' : 'bad'}">${HEB[c]} ${cnt[c]||0}/9</span>`).join('');
@@ -712,36 +464,44 @@ $('rescan').onclick = () => $('go-scan').onclick();
 $('review-home').onclick = () => show('s-home');
 function clearDiag() { netCells.forEach(c => c.classList.remove('diag')); }
 function showSolveError(genericMsg, diag) {
-  if (!diag) { clearDiag(); $('errs').textContent = genericMsg; return; }
-  clearDiag(); diag.idx.forEach(i => netCells[i] && netCells[i].classList.add('diag'));
-  $('errs').innerHTML = `<p>${diag.text}</p><button class="btn" id="diag-fix-btn" type="button">תקן במסך ונסה לפתור שוב</button>`;
-  $('diag-fix-btn').onclick = () => {
-    diag.idx.forEach((i, k) => { facelets[i] = diag.fix[k]; });
-    clearDiag(); paintNet(); $('errs').textContent = '';
-    $('solve-btn').click();
+  clearDiag(); const box = $('errs'); box.replaceChildren();
+  const message = document.createElement('p'); message.textContent = diag ? diag.text : genericMsg; box.appendChild(message);
+  if (!diag) return;
+  diag.idx.forEach(i => netCells[i]?.classList.add('diag'));
+  if (!diag.fix) return;
+  const snapshot = facelets.join('');
+  const button = document.createElement('button'); button.className = 'btn'; button.type = 'button';
+  button.textContent = 'תיקנתי את הפינה בקובייה — עדכן את התרשים';
+  button.onclick = () => {
+    if (facelets.join('') !== snapshot) { paintNet(); return; }
+    diag.idx.forEach((i,k) => facelets[i] = diag.fix[k]);
+    paintNet(); $('errs').textContent = 'התרשים עודכן. השווה שוב לקובייה ואז לחץ על חשב פתרון.';
   };
+  box.appendChild(button);
 }
+let solving = false, activeSolve = null;
 $('solve-btn').onclick = () => {
-  if (facelets.includes('?')) { clearDiag(); $('errs').textContent = 'יש עוד משבצות ריקות.'; return; }
-  const errs = CubeCore.validate(facelets);
-  if (errs.length) { clearDiag(); $('errs').textContent = errs.join(' · '); CONFIG.track('validate_fail', errs); return; }
+  if (solving) return;
+  const check = CubeCore.inspect(facelets);
+  if (!check.valid) { showSolveError(check.text, check); CONFIG.track('validate_fail', check.kind); return; }
+  solving = true; $('solve-btn').disabled = true;
   $('solve-btn').innerHTML = '<span class="spin"></span>מחשב פתרון…';
-  setTimeout(() => {
-    // solve with white DOWN, green front: rotate the scanned cube 180° around the front axis
-    const rotated = rotateZ2(facelets);
-    const res = CubeCore.solve(rotated);
-    $('solve-btn').textContent = 'חשב פתרון';
-    if (res.error) {
-      const diag = CubeCore.diagnose(facelets);
-      showSolveError(res.error, diag);
-      CONFIG.track('solve_fail', diag ? diag.kind : 'unknown');
-      return;
-    }
-    clearDiag(); $('errs').textContent = '';
-    cubeId = hash(rotated.join(''));
-    CONFIG.track('solve_ok', { moves: res.total });
-    startSolve(rotated, res.steps);
-  }, 30);
+  const rotated = rotateZ2(facelets);
+  const finish = res => {
+    activeSolve = null; solving = false; $('solve-btn').disabled = false; $('solve-btn').textContent = 'חשב פתרון';
+    if (res.error) { showSolveError(res.error, null); return; }
+    clearDiag(); $('errs').textContent = ''; cubeId = hash(rotated.join(''));
+    CONFIG.track('solve_ok', { moves: res.total }); startSolve(rotated, res.steps);
+  };
+  // Keep the camera/editor responsive and bound solver execution.
+  try {
+    const worker = new Worker('./solver-worker.js');
+    const timer = setTimeout(() => { worker.terminate(); finish({error:'החישוב ארך זמן רב מדי. נסה שוב או בדוק את הזנת הצבעים.'}); }, 45000);
+    activeSolve = () => { clearTimeout(timer); worker.terminate(); solving = false; $('solve-btn').disabled = false; $('solve-btn').textContent = 'חשב פתרון'; };
+    worker.onmessage = e => { clearTimeout(timer); worker.terminate(); finish(e.data); };
+    worker.onerror = () => { clearTimeout(timer); worker.terminate(); finish({error:'לא ניתן לטעון את הפותר. רענן את האפליקציה ונסה שוב.'}); };
+    worker.postMessage(rotated);
+  } catch (e) { finish({error:'לא ניתן להפעיל את הפותר. פתח את האפליקציה דרך HTTPS או localhost.'}); }
 };
 function rotateZ2(s) {
   // whole-cube 180° turn about the front axis: U<->D, R<->L, F and B rotate 180°
@@ -781,7 +541,7 @@ function makeView(scene, cube, rx0, ry0) {
 }
 // home demo cube (idle spin)
 const homeCubies = build3D($('cube-home'), true); paint3D(homeCubies, 'YYYYYYYYYOOOOOOOOOGGGGGGGGGWWWWWWWWWRRRRRRRRRBBBBBBBBB'.split(''));
-let spin = -38; setInterval(() => { spin += .4; $('cube-home').style.transform = `rotateX(-28deg) rotateY(${spin}deg)`; }, 40);
+let spin = -38; setInterval(() => { if(document.hidden || !$('s-home').classList.contains('on') || matchMedia('(prefers-reduced-motion: reduce)').matches) return; spin += .4; $('cube-home').style.transform = `rotateX(-28deg) rotateY(${spin}deg)`; }, 40);
 
 const P = { state: null, steps: [], flat: [], pos: 0, busy: false, playing: false, cubies: null, view: null };
 const NAME = { U:'העליונה (צהוב)', D:'התחתונה (לבן)', F:'הקדמית (ירוק)', B:'האחורית (כחול)', R:'הימנית (כתום)', L:'השמאלית (אדום)' };
@@ -791,6 +551,7 @@ const PHASE_NAMES = ['צלב לבן','פינות לבנות','שכבה שניי�
 function startSolve(initial, steps) {
   P.initial = initial.slice(); P.state = initial.slice(); P.steps = steps; P.pos = 0; P.playing = false;
   P.flat = []; steps.forEach((s, si) => s.moves.forEach(m => P.flat.push({ step: si, m })));
+  P.busy = false;
   if (!P.cubies) { P.cubies = build3D($('cube')); P.view = makeView($('scene'), $('cube'), -28, -38); }
   $('holdline').textContent = 'לבן למטה, ירוק מולך, כתום מימין';
   const ph = $('phases'); ph.innerHTML = ''; PHASE_NAMES.forEach(() => ph.appendChild(document.createElement('span')));
@@ -862,7 +623,7 @@ $('play').onclick = () => {
     forward(ok => { if (!ok) { P.playing = false; render(); return; } const after = P.pos < P.flat.length ? P.flat[P.pos].step : -1; setTimeout(loop, after !== before ? 1600 : 260); }); };
   if (P.playing) loop();
 };
-$('solve-home').onclick = () => show('s-home');
+$('solve-home').onclick = () => { if (!P.busy) show('s-home'); };
 
 /* ============================================================
    PAYWALL
@@ -884,8 +645,9 @@ async function openPaywall() {
   $('p-unl').textContent = priceOf('unlimited').toFixed(2); $('p-unl-was').hidden = !upg; $('p-unl-was').textContent = '₪' + CONFIG.prices.unlimited.toFixed(2);
   $('payerr').textContent = ''; $('pw').classList.add('on'); stopPay(); selectPlan(plan);
   CONFIG.track('paywall_view', { remain: P.flat.length - P.pos, upgrade: upg });
-  try { live = (await api('/config', {})).live; } catch (e) { live = false; }   // no server / not configured -> dev mode
-  $('devnote').hidden = live; $('paybtn').hidden = !live;
+  try { live = (await api('/config', {})).live; } catch (e) { live = false; }
+  if (!live) $('payerr').textContent = 'התשלום אינו זמין כרגע. נדרש חיבור לרשת ושרת תשלומים פעיל.';
+  $('devnote').hidden = live || !['localhost','127.0.0.1'].includes(location.hostname); $('paybtn').hidden = !live;
 }
 function selectPlan(p) { plan = p; stopPay(); document.querySelectorAll('.plan').forEach(b => b.classList.toggle('on', b.dataset.plan === p)); $('paytotal').textContent = priceOf(p).toFixed(2); $('paybtn').hidden = !live; CONFIG.track('plan_select', p); }
 document.querySelectorAll('.plan').forEach(b => b.onclick = () => selectPlan(b.dataset.plan));
@@ -900,6 +662,7 @@ async function pollStatus() {
   try { const r = await api('/checkout/status', { sessionId: session.id }); if (r.paid) grant(r.unlock); } catch (e) {}
 }
 window.addEventListener('message', e => {
+  if (e.origin !== location.origin || e.source !== $('payframe').contentWindow) return;
   if (e.data === 'smartpay:done') pollStatus();                                          // success page inside the iframe
   else if (e.data === 'smartpay:fail') { $('payerr').textContent = 'התשלום לא אושר. אפשר לנסות שוב.'; CONFIG.track('pay_fail', 'declined'); }
   else if (e.data === 'smartpay:cancel') { stopPay(); CONFIG.track('pay_cancel'); }
@@ -921,7 +684,15 @@ $('restore').onclick = async () => {
   const email = $('email').value.trim(); if (!email) { $('payerr').textContent = 'הזן את האימייל שאיתו שילמת.'; return; }
   try { const res = await api('/restore', { email, cubeId }); grant(res.unlock); } catch (e) { $('payerr').textContent = 'לא נמצאה רכישה לאימייל הזה.'; }
 };
-$('devpay').onclick = () => grant({ plan, cubeId, exp: plan === 'single' ? Date.now() + 7*864e5 : 0, token: 'dev' });
+$('devpay').onclick = () => { if (!['localhost','127.0.0.1'].includes(location.hostname)) return; grant({ plan, cubeId, exp: plan === 'single' ? Date.now() + 7*864e5 : 0, token: 'dev' }); };
+try {
+  const saved = JSON.parse(localStorage.getItem('cubesolve-draft'));
+  if (Array.isArray(saved) && saved.length === 54 && saved.every(c => typeof c === 'string' && c.length === 1 && 'WYGBRO?'.includes(c))) {
+    const resume = document.createElement('button'); resume.className = 'btn'; resume.textContent = 'המשך מהקובייה השמורה';
+    resume.onclick = () => { facelets = saved.slice(); openReview(); };
+    $('s-home').appendChild(resume);
+  }
+} catch (_) {}
 </script>
 </body>
 </html>

@@ -8,7 +8,16 @@ import * as smartpay from './smartpay.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..')));   // serves index.html
+// Serve only the public application, never server source, tests or repository files.
+const publicRoot = path.join(__dirname, '..');
+for (const file of ['index.html','cube-core.js','solver-worker.js','pwa.js','sw.js','manifest.webmanifest']) {
+  app.get('/' + file, (req, res) => {
+    if (file === 'sw.js') res.set('Cache-Control', 'no-cache');
+    res.sendFile(path.join(publicRoot, file));
+  });
+}
+app.get('/', (req, res) => res.sendFile(path.join(publicRoot, 'index.html')));
+app.use('/icons', express.static(path.join(publicRoot, 'icons')));
 
 const PORT = process.env.PORT || 3000;
 const BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
