@@ -21,6 +21,7 @@
   navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'}).then(reg => {
     const ready=() => { if(reg.waiting && navigator.serviceWorker.controller) { waiting=reg.waiting; update.hidden=false; } };
     ready();
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden && navigator.onLine)reg.update().catch(()=>{});});
     reg.addEventListener('updatefound', () => {
       const installing=reg.installing;
       installing?.addEventListener('statechange',ready);
