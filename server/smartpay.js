@@ -58,8 +58,11 @@ async function call(path,body){
   if(format!=='json')throw failure('SMARTPAY_RESPONSE','SmartPay החזיר תשובה לא צפויה. יש לבדוק את כתובת השירות והחיבור.',provider);
   return {http:r.status,data,provider};
 }
-export async function createCheckoutPage({amount,orderId,baseUrl,email,description}){
-  const body={page_uuid:cfg.pageUuid,amount,currency:'ils',success_url:`${baseUrl}/pay/success`,fail_url:`${baseUrl}/pay/fail`,cancel_url:`${baseUrl}/pay/cancel`,ipn_url:`${baseUrl}/api/webhooks/smartpay`,default_language:'he',expired_at_minutes:30,...(email?{customer_details:{email}}:{}),values:{moreinfo1:orderId,...(description?{extra_data:description}:{})}};
+export async function createCheckoutPage({amount,orderId,baseUrl,description}){
+  // Checkout prefill requires name, email AND phone. Collect these on the hosted
+  // page; the app keeps its recovery email in the local purchase session.
+  // Contract: https://docs.starltd.net/streamline.yaml (/checkout/pages).
+  const body={page_uuid:cfg.pageUuid,amount,currency:'ils',success_url:`${baseUrl}/pay/success`,fail_url:`${baseUrl}/pay/fail`,cancel_url:`${baseUrl}/pay/cancel`,ipn_url:`${baseUrl}/api/webhooks/smartpay`,default_language:'he',expired_at_minutes:30,show_customer_fields:true,values:{moreinfo1:orderId,...(description?{extra_data:{description}}:{})}};
   const {http,data,provider}=await call('/checkout/pages',body);
   if(http<200||http>=300||data.status!=='succeeded'||typeof data.url!=='string'||!data.url){
     const field=provider.issues[0]?.field;
