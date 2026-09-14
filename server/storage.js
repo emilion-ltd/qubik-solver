@@ -49,6 +49,11 @@ export function openStore(directory) {
         return session;
       } catch(error) { db.exec('ROLLBACK'); throw error; }
     },
+    purchaseForToken(token) {
+      if (typeof token !== 'string' || token.length > 4096) return null;
+      const row = db.prepare("SELECT email,data FROM purchases WHERE json_extract(data,'$.unlock.token')=? LIMIT 1").get(token);
+      return row ? {email:row.email,...JSON.parse(row.data)} : null;
+    },
     signingSecret(configured) {
       // Persist the first key so restarts without an env override preserve tokens.
       const candidate=configured || crypto.randomBytes(32).toString('hex');

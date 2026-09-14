@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env index.js",
-    "test": "node ../tests/core.cjs && node --test ../tests/storage.test.mjs ../tests/seo.test.mjs"
+    "test": "node ../tests/core.cjs && node --test ../tests/*.test.mjs"
   },
   "dependencies": {
     "express": "^4.19.2"

@@ -192,8 +192,41 @@ const CubeCore = (() => {
       }
       solvePieces([[1, -1, 1], [-1, -1, 1], [1, -1, -1], [-1, -1, -1]], cm, 3, 2, 'פינות השכבה הראשונה',
         p => `הכנס את הפינה ${pieceName(p)} למקומה: מביאים אותה מעל המקום שלה ומבצעים R U R' U' עד שהיא נכנסת (או הגרסה הקצרה R U2 R' U' R U R' כשהצבע התחתון פונה למעלה). האותיות משתנות לפי הפינה כי ממשיכים להחזיק את הקוביה באותה אחיזה.`);
-      const partial = s.some((c,i) => c !== C[faceOf(i)]);
-      return { steps, partial, total: steps.reduce((n, st) => n + st.moves.length, 0) };
+      // 3. middle layer
+      const mm = U_MACROS.slice();
+      for (let k = 0; k < 4; k++) {
+        const r = rotateAlg("U R U' R' U' F' U F", k), l = rotateAlg("U' L' U L U F U' F'", k);
+        mm.push(macro('הכנסה ימינה: ' + r, r, 'mid' + k)); mm.push(macro('הכנסה שמאלה: ' + l, l, 'mid' + k));
+      }
+      solvePieces([[1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1]], mm, 3, 3, 'השכבה השנייה',
+        p => `הכנס את הקצה ${pieceName(p)} למקומו בשכבה האמצעית: קודם מיישרים אותו למעלה מול המרכז התואם, ואז אלגוריתם הכנסה ימינה (U R U' R' U' F' U F) או שמאלה (U' L' U L U F U' F'), עם האותיות מותאמות לפאה שמולה עומד הקצה.`);
+      // 4. top cross (orientation)
+      const topEdges = [], topCorners = [];
+      POS.forEach(({ p, n }, i) => { if (n[1] === 1) { if ((p[0] === 0) !== (p[2] === 0)) topEdges.push(i); else if (p[0] !== 0 && p[2] !== 0) topCorners.push(i); } });
+      const top = colorName(C[0]);
+      let r = solveGoal(s, st => topEdges.every(i => st[i] === C[0]), U_MACROS.concat([macro("F R U R' U' F'", "F R U R' U' F'", 'yc')]), 5);
+      if (!r) throw new Error('phase 4');
+      for (const m of r) s = apply(s, m.perm);
+      if (r.length) record(4, 'הצלב ה' + top, `האלגוריתם F R U R' U' F' הופך קצוות ${top}ים כלפי מעלה. חוזרים עליו (עם סיבובי U ביניהם לכיוון הצורה) עד שנוצר צלב.`, r);
+      // 5. top face
+      r = solveGoal(s, st => topCorners.every(i => st[i] === C[0]), U_MACROS.concat([macro("R U R' U R U2 R'", "R U R' U R U2 R'", 'sune')]), 6);
+      if (!r) throw new Error('phase 5');
+      for (const m of r) s = apply(s, m.perm);
+      if (r.length) record(5, 'הפאה ה' + top + 'ה', `האלגוריתם R U R' U R U2 R' (Sune) מסובב פינות. חוזרים עליו, עם סיבובי U ביניהם, עד שכל הפאה העליונה ${top}ה.`, r);
+      // 6. corner permutation (up to U)
+      const cornerGoal = makeGoal(pairsFor([[1, 1, 1], [-1, 1, 1], [1, 1, -1], [-1, 1, -1]]));
+      const placed = st => { for (let k = 0; k < 4; k++) { if (cornerGoal(st)) return true; st = apply(st, MOVES.U); } return false; };
+      r = solveGoal(s, placed, U_MACROS.concat([macro("R' F R' B2 R F' R' B2 R2", "R' F R' B2 R F' R' B2 R2", 'cp'), macro("R2 B2 R F R' B2 R F' R", "R2 B2 R F R' B2 R F' R", 'cp')]), 6);
+      if (!r) throw new Error('phase 6');
+      for (const m of r) s = apply(s, m.perm);
+      if (r.length) record(6, 'סידור הפינות העליונות', `האלגוריתם R' F R' B2 R F' R' B2 R2 מסובב שלוש פינות עליונות במעגל בלי לקלקל את הפאה העליונה (הגרסה ההפוכה: R2 B2 R F R' B2 R F' R). אחריו כל פינה יושבת בין שני הצבעים שלה.`, r);
+      // 7. edges + final U
+      const solvedGoal = makeGoal(Array.from({ length: 54 }, (_, i) => [i, C[faceOf(i)]]));
+      r = solveGoal(s, solvedGoal, U_MACROS.concat([macro("F2 U L R' F2 L' R U F2", "F2 U L R' F2 L' R U F2", 'ep'), macro("F2 U' L R' F2 L' R U' F2", "F2 U' L R' F2 L' R U' F2", 'ep')]), 6);
+      if (!r) throw new Error('phase 7');
+      for (const m of r) s = apply(s, m.perm);
+      if (r.length) record(7, 'סידור הקצוות העליונים', `האלגוריתם F2 U L R' F2 L' R U F2 מסובב שלושה קצוות עליונים במעגל (הגרסה עם U' בכיוון ההפוך). אחריו נשאר רק ליישר את השכבה העליונה.`, r);
+      return { steps, total: steps.reduce((n, st) => n + st.moves.length, 0) };
     } catch (e) {
       return { error: 'המצב שהוזן לא ניתן לפתרון — בדרך כלל מדבקה אחת או שתיים זוהו לא נכון (הצבעים הדומים: אדום/כתום, לבן/צהוב). השווה את התרשים לקוביה שלך ותקן את המשבצות השגויות, או צלם מחדש בתאורה טובה.' };
     }
@@ -202,3 +235,5 @@ const CubeCore = (() => {
   return { POS, INDEX, MOVES, FACE_AXIS, apply, algPerm, inverse, validate, solve, inspect, diagnose: s => { const r = inspect(s); return r.valid ? null : r; }, centers, key };
 })();
 
+
+module.exports = CubeCore;

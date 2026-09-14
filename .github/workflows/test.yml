@@ -16,8 +16,13 @@ jobs:
       - run: node --test tests/seo.test.mjs
       - run: node --check server/seo.js
       - run: npm ci --prefix server
+      - run: node --test tests/payments.test.mjs tests/provider.test.mjs
       - run: npm install --prefix /tmp/cube-browser --no-save --package-lock=false playwright@1.55.1
       - run: node /tmp/cube-browser/node_modules/playwright/cli.js install --with-deps chromium
       - run: node tests/browser.cjs
         env:
           NODE_PATH: /tmp/cube-browser/node_modules
+      - run: node tests/payment-browser.cjs
+        env:
+          NODE_PATH: /tmp/cube-browser/node_modules
+      - run: docker build -t cubesolve-ci .
