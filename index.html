@@ -57,6 +57,9 @@
   .nf{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;aspect-ratio:1;position:relative}
   .nf i{display:block;border-radius:4px;background:#0d1119;border:2px solid transparent}
   .nf i.q{background:#3a4459} .nf i.sel{border-color:#fff}
+  .nf i.diag{outline:3px solid var(--accent);outline-offset:1px;animation:diagpulse 1.1s ease-in-out infinite}
+  @keyframes diagpulse{0%,100%{outline-color:var(--accent)}50%{outline-color:#fff}}
+  .errs button{margin-top:8px}
   .nf i.center{outline:2px dashed rgba(255,255,255,.35);outline-offset:-4px}
   .nf .lbl{position:absolute;inset:auto 0 -18px 0;text-align:center;font-size:11px;color:var(--muted)}
   .palette{display:flex;gap:8px;justify-content:center;margin:26px 0 6px}
@@ -280,6 +283,85 @@ const CubeCore = (() => {
     return errs;
   }
 
+  // ---------- diagnosis ----------
+  // Every piece is present (validate() passed) but the cube still isn't solvable.
+  // That only happens if someone physically pulled a piece out and put it back
+  // wrong — a single twisted corner, flipped edge, or two same-type pieces
+  // swapped — never from turning the cube. Pinpoint exactly which piece(s) and
+  // what they should show; null means the mess doesn't match one clean pattern.
+  function diagnosePieceDefect(s) {
+    const C = centers(s);
+    const dirLabel = n => n[1] === 1 ? 'למעלה' : n[1] === -1 ? 'למטה' : n[2] === 1 ? 'קדימה' : n[2] === -1 ? 'אחורה' : n[0] === 1 ? 'ימינה' : 'שמאלה';
+    const name = c => HEB[c] || c;
+    const label = colors => colors.map(name).join('-');
+    const describe = inf => inf.idx.map((i, k) => `${dirLabel(POS[i].n)}: ${name(inf.target[k])}`).join(' · ');
+
+    function analyze(positions) {
+      const info = positions.map(p => {
+        const idx = stickersAt(p);
+        const target = idx.map(i => C[faceOf(i)]);
+        const actual = idx.map(i => s[i]);
+        return { idx, target, actual, targetSet: target.slice().sort().join(''), actualSet: actual.slice().sort().join('') };
+      });
+      const homeOf = info.map(inf => info.findIndex(h => h.targetSet === inf.actualSet));
+      return { info, homeOf };
+    }
+    function cyclesOf(perm) {
+      const seen = new Array(perm.length).fill(false), out = [];
+      for (let i = 0; i < perm.length; i++) {
+        if (seen[i]) continue;
+        if (perm[i] === -1) return null;   // shouldn't happen once validate() passed
+        if (perm[i] === i) { seen[i] = true; continue; }
+        const c = []; let j = i;
+        while (!seen[j]) { seen[j] = true; c.push(j); j = perm[j]; }
+        out.push(c);
+      }
+      return out;
+    }
+
+    const CORNER_POS = []; for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) CORNER_POS.push([x, y, z]);
+    const EDGE_POS = [];
+    for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) for (const z of [-1, 0, 1])
+      if ((x === 0) + (y === 0) + (z === 0) === 1) EDGE_POS.push([x, y, z]);
+
+    const corner = analyze(CORNER_POS), edge = analyze(EDGE_POS);
+    const cCycles = cyclesOf(corner.homeOf), eCycles = cyclesOf(edge.homeOf);
+    if (!cCycles || !eCycles) return null;
+
+    if (!cCycles.length && !eCycles.length) {
+      // every piece is in its own slot — any leftover mismatch is pure orientation
+      const twisted = corner.info.filter(inf => inf.actual.join('') !== inf.target.join(''));
+      const flipped = edge.info.filter(inf => inf.actual.join('') !== inf.target.join(''));
+      if (twisted.length === 1 && !flipped.length) {
+        const inf = twisted[0];
+        return { kind: 'corner-twist', idx: inf.idx, fix: inf.target,
+          text: `פינה אחת סובבה במקומה — זה לא קורה מסיבוב חוקי של הקוביה, מישהו כנראה שלף אותה והחזיר אותה מסובבת. מצאתי אותה (מסומנת ברשת למטה): הפינה עם הצבעים ${label(inf.actual)}. שלוף אותה בעדינות (סובב שכבה סמוכה ב-45° כדי לפנות מקום) והחזר אותה כך שהיא תשב עם ${describe(inf)}.` };
+      }
+      if (flipped.length === 1 && !twisted.length) {
+        const inf = flipped[0];
+        return { kind: 'edge-flip', idx: inf.idx, fix: inf.target,
+          text: `קצה אחד התהפך במקומו — סימן שמישהו שלף אותו והחזיר אותו הפוך. מצאתי אותו (מסומן ברשת למטה): הקצה עם הצבעים ${label(inf.actual)}. שלוף אותו בעדינות והחזר אותו הפוך, כך שהוא יישב עם ${describe(inf)}.` };
+      }
+      return null;
+    }
+
+    const cleanApartFrom = (piece, cycles) => {
+      const inCycle = new Set(cycles.flat());
+      return piece.info.every((inf, i) => inCycle.has(i) || inf.actual.join('') === inf.target.join(''));
+    };
+    if (cCycles.length === 1 && cCycles[0].length === 2 && !eCycles.length && cleanApartFrom(corner, cCycles) && cleanApartFrom(edge, [])) {
+      const [a, b] = cCycles[0], pa = corner.info[a], pb = corner.info[b];
+      return { kind: 'corner-swap', idx: pa.idx.concat(pb.idx), fix: pa.target.concat(pb.target),
+        text: `שתי פינות הוחלפו ביניהן במקום (מסומנות ברשת למטה) — הפינה עם הצבעים ${label(pa.actual)} והפינה עם הצבעים ${label(pb.actual)}. שלוף את שתיהן והחלף ביניהן: כל פינה כמות שהיא, בלי לסובב אותה.` };
+    }
+    if (eCycles.length === 1 && eCycles[0].length === 2 && !cCycles.length && cleanApartFrom(edge, eCycles) && cleanApartFrom(corner, [])) {
+      const [a, b] = eCycles[0], pa = edge.info[a], pb = edge.info[b];
+      return { kind: 'edge-swap', idx: pa.idx.concat(pb.idx), fix: pa.target.concat(pb.target),
+        text: `שני קצוות הוחלפו ביניהם במקום (מסומנים ברשת למטה) — הקצה עם הצבעים ${label(pa.actual)} והקצה עם הצבעים ${label(pb.actual)}. שלוף את שניהם והחלף ביניהם.` };
+    }
+    return null;
+  }
+
   // ---------- solver ----------
   const ROT = { F: 'R', R: 'B', B: 'L', L: 'F', U: 'U', D: 'D' };
   const rotateAlg = (alg, k) => { for (let i = 0; i < k; i++) alg = alg.split(' ').map(m => ROT[m[0]] + m.slice(1)).join(' '); return alg; };
@@ -398,7 +480,7 @@ const CubeCore = (() => {
     }
   }
 
-  return { POS, INDEX, MOVES, FACE_AXIS, apply, algPerm, inverse, validate, solve, centers, key };
+  return { POS, INDEX, MOVES, FACE_AXIS, apply, algPerm, inverse, validate, solve, diagnose: diagnosePieceDefect, centers, key };
 })();
 
 </script>
@@ -628,17 +710,34 @@ function paintNet() {
 function openReview() { buildNet(); paintNet(); show('s-review'); CONFIG.track('review_open'); }
 $('rescan').onclick = () => $('go-scan').onclick();
 $('review-home').onclick = () => show('s-home');
+function clearDiag() { netCells.forEach(c => c.classList.remove('diag')); }
+function showSolveError(genericMsg, diag) {
+  if (!diag) { clearDiag(); $('errs').textContent = genericMsg; return; }
+  clearDiag(); diag.idx.forEach(i => netCells[i] && netCells[i].classList.add('diag'));
+  $('errs').innerHTML = `<p>${diag.text}</p><button class="btn" id="diag-fix-btn" type="button">תקן במסך ונסה לפתור שוב</button>`;
+  $('diag-fix-btn').onclick = () => {
+    diag.idx.forEach((i, k) => { facelets[i] = diag.fix[k]; });
+    clearDiag(); paintNet(); $('errs').textContent = '';
+    $('solve-btn').click();
+  };
+}
 $('solve-btn').onclick = () => {
-  if (facelets.includes('?')) { $('errs').textContent = 'יש עוד משבצות ריקות.'; return; }
+  if (facelets.includes('?')) { clearDiag(); $('errs').textContent = 'יש עוד משבצות ריקות.'; return; }
   const errs = CubeCore.validate(facelets);
-  if (errs.length) { $('errs').textContent = errs.join(' · '); CONFIG.track('validate_fail', errs); return; }
+  if (errs.length) { clearDiag(); $('errs').textContent = errs.join(' · '); CONFIG.track('validate_fail', errs); return; }
   $('solve-btn').innerHTML = '<span class="spin"></span>מחשב פתרון…';
   setTimeout(() => {
     // solve with white DOWN, green front: rotate the scanned cube 180° around the front axis
     const rotated = rotateZ2(facelets);
     const res = CubeCore.solve(rotated);
     $('solve-btn').textContent = 'חשב פתרון';
-    if (res.error) { $('errs').textContent = res.error; CONFIG.track('solve_fail'); return; }
+    if (res.error) {
+      const diag = CubeCore.diagnose(facelets);
+      showSolveError(res.error, diag);
+      CONFIG.track('solve_fail', diag ? diag.kind : 'unknown');
+      return;
+    }
+    clearDiag(); $('errs').textContent = '';
     cubeId = hash(rotated.join(''));
     CONFIG.track('solve_ok', { moves: res.total });
     startSolve(rotated, res.steps);
