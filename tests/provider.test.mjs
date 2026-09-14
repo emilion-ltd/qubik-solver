@@ -53,3 +53,25 @@ test('checkout exposes structured, redacted provider diagnostics across error sh
   await assert.rejects(provider.createCheckoutPage(input),e=>e.code==='SMARTPAY_TIMEOUT'&&!e.message.includes('secret network detail'));
  }finally{globalThis.fetch=original;}
 });
+
+// SmartPay /checkout/pages requires all three fields if customer_details is sent.
+test('checkout collects complete customer details on SmartPay and sends object metadata',async()=>{
+ const original=globalThis.fetch;let calls=0;
+ globalThis.fetch=async(url,options)=>{
+  calls++;const body=JSON.parse(options.body);
+  const invalidCustomer=body.customer_details&&['name','email','phone'].some(k=>!body.customer_details[k]);
+  const invalidMetadata=body.values?.extra_data!==undefined&&typeof body.values.extra_data!=='object';
+  if(invalidCustomer||invalidMetadata)return new Response(JSON.stringify({status:'failed',errors:{[invalidCustomer?'customer_details':'values']:{message:'Object is invalid'}}}),{status:400});
+  assert.equal(body.show_customer_fields,true);
+  assert.equal(Object.hasOwn(body,'customer_details'),false);
+  assert.equal(body.values.moreinfo1,'order-regression');
+  assert.deepEqual(body.values.extra_data,{description:'CubeSolve — פתרון אחד'});
+  return new Response(JSON.stringify({status:'succeeded',url:'https://checkout.example/session'}));
+ };
+ try{
+  for(const email of ['buyer@example.com',undefined]){
+   assert.equal((await provider.createCheckoutPage({amount:790,orderId:'order-regression',baseUrl:'https://cube.example',email,description:'CubeSolve — פתרון אחד'})).url,'https://checkout.example/session');
+  }
+  assert.equal(calls,2);
+ }finally{globalThis.fetch=original;}
+});
