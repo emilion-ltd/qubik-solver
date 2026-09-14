@@ -75,3 +75,16 @@ test('unlimited purchase and upgrade require proof, not knowledge of an email',a
   assert.equal((await f.post('/solve/full',{state:core.apply(state,core.MOVES.U),token:unlimited.token})).status,200);
  }finally{await f.close();}
 });
+
+test('provider diagnostics stay in operator logs and correlate with the public error',async()=>{
+ const dir=mkdtempSync(path.join(tmpdir(),'cube-diagnostic-')),store=openStore(dir),logs=[];
+ const provider={configured:()=>true,async createCheckoutPage(){throw Object.assign(new Error('Checkout declined'),{status:502,code:'SMARTPAY_CHECKOUT',provider:{http:400,status:'failed',issues:[{field:'page_uuid',message:'Required Field'}]}});}};
+ const app=createApp({store,provider,secret,baseURL:'http://localhost:3000'}),server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+ const original=console.error;console.error=(...args)=>logs.push(args);
+ try{
+  const response=await fetch('http://127.0.0.1:'+server.address().port+'/api/checkout/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state,plan:'single',email:'buyer@example.com'})});
+  const body=await response.json();assert.equal(response.status,502);assert.match(body.requestId,/^[0-9a-f-]{36}$/);
+  assert.ok(body.error.includes(body.requestId));assert.equal(body.provider,undefined);assert.ok(!JSON.stringify(body).includes('Required Field'));
+  const logged=JSON.parse(logs[0][1]);assert.equal(logged.requestId,body.requestId);assert.equal(logged.provider.issues[0].field,'page_uuid');
+ }finally{console.error=original;await new Promise(r=>server.close(r));store.close();rmSync(dir,{recursive:true,force:true});}
+});
