@@ -394,7 +394,7 @@ const CubeCore = (() => {
       if (r.length) record(7, 'סידור הקצוות העליונים', `האלגוריתם F2 U L R' F2 L' R U F2 מסובב שלושה קצוות עליונים במעגל (הגרסה עם U' בכיוון ההפוך). אחריו נשאר רק ליישר את השכבה העליונה.`, r);
       return { steps, total: steps.reduce((n, st) => n + st.moves.length, 0) };
     } catch (e) {
-      return { error: 'המצב שנסרק לא ניתן לפתרון (' + e.message + '). כנראה חתיכה מסובבת או שני מדבקות התחלפו. בדוק את הצבעים ותקן.' };
+      return { error: 'המצב שהוזן לא ניתן לפתרון — בדרך כלל מדבקה אחת או שתיים זוהו לא נכון (הצבעים הדומים: אדום/כתום, לבן/צהוב). השווה את התרשים לקוביה שלך ותקן את המשבצות השגויות, או צלם מחדש בתאורה טובה.' };
     }
   }
 
@@ -438,13 +438,15 @@ const hash = str => { let h = 5381; for (const c of str) h = ((h << 5) + h + c.c
 /* ============================================================
    SCAN — guided capture, white on top, green facing you
    ============================================================ */
+// The cube may be fully scrambled — only the CENTER sticker of each face matters
+// (centers never move: white center up + green center front puts red right, orange left).
 const SCAN_ORDER = [
-  { face:'F', center:'G', text:'לבן למעלה, ירוק מולך. צלם את הפאה הירוקה.' },
-  { face:'R', center:'R', text:'סובב את הקוביה שמאלה (לבן נשאר למעלה). צלם את הפאה האדומה.' },
-  { face:'B', center:'B', text:'סובב שוב שמאלה. צלם את הפאה הכחולה.' },
-  { face:'L', center:'O', text:'סובב שוב שמאלה. צלם את הפאה הכתומה.' },
-  { face:'U', center:'W', text:'חזור לירוק מולך, והטה את הקוביה כלפיך כך שהלבן מול המצלמה והירוק בתחתית התמונה.' },
-  { face:'D', center:'Y', text:'ירוק מולך, הטה את הקוביה כלפי מעלה: הצהוב מול המצלמה והירוק בראש התמונה.' },
+  { face:'F', center:'G', text:'החזק כך שהמרכז הלבן למעלה והמרכז הירוק מולך (שאר המשבצות בכל צבע — זה בסדר). צלם.' },
+  { face:'R', center:'R', text:'סובב את הקוביה שמאלה, כך שהפאה שהייתה מימין — עם המרכז האדום — תפנה אליך. הלבן נשאר למעלה.' },
+  { face:'B', center:'B', text:'סובב שוב שמאלה: עכשיו מולך הפאה עם המרכז הכחול.' },
+  { face:'L', center:'O', text:'סובב שוב שמאלה: עכשיו מולך הפאה עם המרכז הכתום.' },
+  { face:'U', center:'W', text:'חזור למרכז הירוק מולך, והטה את הקוביה כלפיך: המרכז הלבן מול המצלמה, והפאה הירוקה למטה.' },
+  { face:'D', center:'Y', text:'מהירוק מולך, הטה את הקוביה כלפי מעלה: המרכז הצהוב מול המצלמה, והפאה הירוקה למעלה.' },
 ];
 const FACE_OFFSET = { U:0, R:9, F:18, D:27, L:36, B:45 };
 let scanIdx = 0, samples = {}; // face -> [9 x [r,g,b]]
@@ -493,7 +495,14 @@ function renderScanUI() {
   const d = $('dots'); d.innerHTML = '';
   SCAN_ORDER.forEach((s, i) => { const sp = document.createElement('span'); sp.textContent = i + 1; sp.className = i < scanIdx ? 'done' : (i === scanIdx ? 'cur' : ''); d.appendChild(sp); });
   const cur = SCAN_ORDER[scanIdx]; $('holdtext').textContent = cur.text;
-  const mini = $('mini'); mini.innerHTML = ''; for (let i = 0; i < 9; i++) { const c = document.createElement('i'); c.className = cur.center; mini.appendChild(c); }
+  // only the center is shown in color — the rest of the face can be any mix of colors
+  const mini = $('mini'); mini.innerHTML = '';
+  for (let i = 0; i < 9; i++) {
+    const c = document.createElement('i');
+    if (i === 4) c.className = cur.center;
+    else { c.style.background = '#3a4459'; c.style.display = 'flex'; c.style.alignItems = 'center'; c.style.justifyContent = 'center'; c.style.fontSize = '9px'; c.style.color = '#6b7488'; c.style.fontStyle = 'normal'; c.textContent = '?'; }
+    mini.appendChild(c);
+  }
   $('scan-back').disabled = scanIdx === 0;
 }
 function sampleFace() {
@@ -514,7 +523,25 @@ function sampleFace() {
   }
   return out;
 }
+const perms = a => a.length <= 1 ? [a] : a.flatMap((x, i) => perms(a.slice(0, i).concat(a.slice(i + 1))).map(p => [x, ...p]));
 function classify() {
+  // A captured face is identified by its own center color (centers never move),
+  // so the photo ORDER of the four side faces is forgiving: best 1:1 matching of
+  // captured centers to colors, within {side faces} and within {top, bottom}.
+  const colorFace = {}; SCAN_ORDER.forEach(s => colorFace[s.center] = s.face);
+  const remapped = {};
+  let reordered = false;
+  for (const group of [['F', 'R', 'B', 'L'], ['U', 'D']]) {
+    const colors = group.map(f => SCAN_ORDER.find(s => s.face === f).center);
+    let best = colors, bestD = Infinity;
+    for (const p of perms(colors)) {
+      const d = group.reduce((t, f, i) => t + dist(samples[f][4], ANCHOR[p[i]]), 0);
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    group.forEach((f, i) => { remapped[colorFace[best[i]]] = samples[f]; if (colorFace[best[i]] !== f) reordered = true; });
+  }
+  samples = remapped;
+  if (reordered) CONFIG.track('scan_reordered');
   // reference = the 6 sampled centers; assign greedily so every color is used exactly 9 times
   const refs = SCAN_ORDER.map(s => ({ color: s.center, rgb: samples[s.face][4] }));
   const all = [];
@@ -530,9 +557,18 @@ function snapProblem(s) {
   const bright = s.reduce((t, c) => t + Math.max(...c), 0) / 9;
   if (bright < 55) return 'חשוך מדי — קרב את הקוביה לאור';
   const expected = SCAN_ORDER[scanIdx].center;
-  const ranked = Object.keys(ANCHOR).sort((a, b) => dist(s[4], ANCHOR[a]) - dist(s[4], ANCHOR[b]));
-  const dBest = dist(s[4], ANCHOR[ranked[0]]), dExp = dist(s[4], ANCHOR[expected]);
-  if (ranked[0] !== expected && dExp > dBest * 1.6 + 0.02) return `המרכז לא נראה ${HEB[expected]} אלא ${HEB[ranked[0]]} — בדוק את האחיזה`;
+  const nearest = rgb => Object.keys(ANCHOR).sort((a, b) => dist(rgb, ANCHOR[a]) - dist(rgb, ANCHOR[b]))[0];
+  const got = nearest(s[4]);
+  const confident = got !== expected && dist(s[4], ANCHOR[expected]) > dist(s[4], ANCHOR[got]) * 1.6 + 0.02;
+  if (scanIdx < 4) {
+    // side faces are accepted in any order (identified by their center later);
+    // warn only when the camera clearly sees top/bottom or a face already captured
+    if (confident && (got === 'W' || got === 'Y')) return `זה נראה כמו המרכז ה${HEB[got]} — עכשיו מצלמים את פאות הצד (הלבן נשאר למעלה)`;
+    const seen = Object.values(samples).map(sm => nearest(sm[4]));
+    if (confident && seen.includes(got)) return `נראה שכבר צילמת את הפאה עם המרכז ה${HEB[got]}`;
+  } else if (confident) {
+    return `המרכז לא נראה ${HEB[expected]} אלא ${HEB[got]} — בדוק את האחיזה`;
+  }
   return null;
 }
 $('go-scan').onclick = async () => { scanIdx = 0; samples = {}; warnFace = -1; show('s-scan'); renderScanUI(); await startCamera(); };
