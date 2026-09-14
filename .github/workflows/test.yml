@@ -1,0 +1,23 @@
+name: Cube checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tests/core.cjs
+      - run: node --test tests/storage.test.mjs
+      - run: node --check server/index.js
+      - run: node --test tests/seo.test.mjs
+      - run: node --check server/seo.js
+      - run: npm ci --prefix server
+      - run: npm install --prefix /tmp/cube-browser --no-save --package-lock=false playwright@1.55.1
+      - run: node /tmp/cube-browser/node_modules/playwright/cli.js install --with-deps chromium
+      - run: node tests/browser.cjs
+        env:
+          NODE_PATH: /tmp/cube-browser/node_modules
