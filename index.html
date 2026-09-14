@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1c2230">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%A9%3C/text%3E%3C/svg%3E">
 <title>CubeSolve — צלם, ותפתור</title>
 <style>
   :root{
@@ -198,18 +199,12 @@
       <button class="plan on" data-plan="unlimited"><span class="tag">הכי משתלם</span><div class="price">₪<span id="p-unl">24.90</span><s id="p-unl-was" hidden></s></div><div class="name">ללא הגבלה, לתמיד</div><div class="sub">כל ערבוב, כל קוביה, גם של הילדים</div></button>
     </div>
     <div class="pay-form">
-      <div class="wallets" id="wallets" hidden><button id="applepay"> Pay</button><button id="gpay">G Pay</button></div>
-      <div class="or" id="or" hidden>או בכרטיס אשראי</div>
       <div class="field"><input id="email" type="email" placeholder="אימייל לקבלה" autocomplete="email"></div>
-      <div id="cardfields">
-        <div class="field hf"><div id="sp-card-number"></div></div>
-        <div class="fields2">
-          <div class="field hf"><div id="sp-expiry"></div></div>
-          <div class="field hf"><div id="sp-cvv"></div></div>
-        </div>
+      <div id="payframe-wrap" hidden style="margin-top:10px">
+        <iframe id="payframe" title="תשלום מאובטח — SmartPay" allow="payment" style="width:100%;height:480px;border:0;border-radius:14px;background:#fff"></iframe>
       </div>
       <div class="payerr" id="payerr"></div>
-      <button class="btn primary" id="paybtn">פתח את הפתרון · ₪<span id="paytotal">24.90</span></button>
+      <button class="btn primary" id="paybtn">מעבר לתשלום מאובטח · ₪<span id="paytotal">24.90</span></button>
       <p class="promise"><b>לא נפתר? החזר מלא.</b> תשלום מאובטח דרך SmartPay, בלי מנוי מתחדש.</p>
       <button class="btn ghost" id="restore">כבר שילמת? שחזר רכישה</button>
       <div class="devnote" id="devnote" hidden>מצב פיתוח: SmartPay עדיין לא מחובר. <button class="btn" style="margin-top:6px" id="devpay">דמה תשלום מוצלח</button></div>
@@ -267,10 +262,11 @@ const CubeCore = (() => {
   function validate(s) {
     // s: array of 54 color chars
     const errs = [];
+    const heb = c => HEB[c] || c;
     const cnt = {}; s.forEach(c => cnt[c] = (cnt[c] || 0) + 1);
     const C = centers(s);
     if (new Set(C).size !== 6) errs.push('שישה מרכזים חייבים להיות בצבעים שונים');
-    for (const c of C) if (cnt[c] !== 9) errs.push(`הצבע ${c} מופיע ${cnt[c] || 0} פעמים במקום 9`);
+    for (const c of C) if (cnt[c] !== 9) errs.push(`הצבע ה${heb(c)} מופיע ${cnt[c] || 0} פעמים במקום 9`);
     if (errs.length) return errs;
     // piece sets
     const want = new Set(), got = new Set();
@@ -279,7 +275,8 @@ const CubeCore = (() => {
       want.add(idx.map(i => C[faceOf(i)]).sort().join(''));
       got.add(idx.map(i => s[i]).sort().join(''));
     }
-    for (const w of want) if (!got.has(w)) errs.push('חסרה חתיכה: ' + w.split('').join('-'));
+    for (const w of want) if (!got.has(w)) errs.push('חסרה חתיכה: ' + w.split('').map(heb).join('-'));
+    if (errs.length) errs.push('בדרך כלל זה קורה כשפאה שלמה הוזנה מסובבת או בהיפוך — בדוק במיוחד את הפאה האחורית, העליונה והתחתונה מול סדר הצילום.');
     return errs;
   }
 
@@ -413,39 +410,7 @@ const CONFIG = {
   apiBase: '/api',
   prices: { single: 7.90, unlimited: 24.90 },
   freePhases: 2,                     // phases 1-2 free, 3-7 paid
-  smartpay: {
-    sdkUrl: '',                      // TODO: SmartPay hosted-fields JS URL from docs.starltd.net/smartpay
-    publicKey: '',                   // TODO: public / terminal key
-  },
   track: (event, data) => { try { console.log('[track]', event, data || ''); } catch (e) {} }
-};
-
-/* ============================================================
-   SmartPay Hosted Fields adapter — the only place that talks to SmartPay's JS.
-   Fill the 4 TODOs from the docs; everything else already works.
-   ============================================================ */
-const SmartPayClient = {
-  ready: false, sdk: null,
-  async load() {
-    if (!CONFIG.smartpay.sdkUrl) return false;              // dev mode
-    if (this.ready) return true;
-    await new Promise((res, rej) => { const s = document.createElement('script'); s.src = CONFIG.smartpay.sdkUrl; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
-    // TODO 1: create the SDK instance with the public key, e.g. this.sdk = new window.SmartPay(CONFIG.smartpay.publicKey);
-    this.ready = true; return true;
-  },
-  async mount(session) {
-    // TODO 2: render hosted fields into #sp-card-number, #sp-expiry, #sp-cvv using session.clientToken
-    // e.g. this.fields = await this.sdk.hostedFields.create({ session: session.clientToken,
-    //        fields: { number: '#sp-card-number', expiry: '#sp-expiry', cvv: '#sp-cvv' },
-    //        styles: { input: { color: '#f3f1ea', fontSize: '16px' } } });
-  },
-  async tokenize() {
-    // TODO 3: submit the hosted fields and return the one-time payment token
-    // e.g. const r = await this.fields.tokenize(); return r.token;
-    throw new Error('SmartPay tokenize not implemented');
-  },
-  canWallet() { return false; },                            // TODO 4: return true if Apple Pay / Google Pay is available via the SDK
-  async walletPay() { throw new Error('wallet not implemented'); }
 };
 
 /* ============================================================
@@ -491,7 +456,12 @@ async function startCamera() {
     $('video').srcObject = stream; $('cammsg').textContent = 'מלא את הריבועים עם הפאה, והחזק ישר';
     return true;
   } catch (e) {
-    $('cammsg').textContent = 'אין גישה למצלמה (נדרש HTTPS ואישור). אפשר להזין ידנית.';
+    const why = e && e.name === 'NotAllowedError' ? 'הדפדפן חסם — צריך לאשר גישה למצלמה'
+      : e && e.name === 'NotFoundError' ? 'לא נמצאה מצלמה במכשיר'
+      : location.protocol !== 'https:' && location.hostname !== 'localhost' ? 'מצלמה עובדת רק ב־HTTPS או localhost'
+      : (e && e.name) || 'שגיאה';
+    $('cammsg').textContent = `אין גישה למצלמה (${why}). אפשר להזין ידנית.`;
+    CONFIG.track('camera_fail', e && e.name);
     return false;
   }
 }
@@ -728,42 +698,55 @@ $('solve-home').onclick = () => show('s-home');
 /* ============================================================
    PAYWALL
    ============================================================ */
-let plan = 'unlimited', session = null;
+let plan = 'unlimited', session = null, pollTimer = null, live = false;
 function priceOf(p) {
   const u = Unlock.get();
   if (p === 'unlimited' && u && u.plan === 'single') return +(CONFIG.prices.unlimited - CONFIG.prices.single).toFixed(2); // upgrade credit
   return CONFIG.prices[p];
+}
+function stopPay() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  session = null; $('payframe-wrap').hidden = true; $('payframe').src = 'about:blank'; $('paybtn').hidden = false;
 }
 async function openPaywall() {
   $('pw-remain').textContent = P.flat.length - P.pos;
   $('p-single').textContent = CONFIG.prices.single.toFixed(2);
   const upg = priceOf('unlimited') !== CONFIG.prices.unlimited;
   $('p-unl').textContent = priceOf('unlimited').toFixed(2); $('p-unl-was').hidden = !upg; $('p-unl-was').textContent = '₪' + CONFIG.prices.unlimited.toFixed(2);
-  $('payerr').textContent = ''; $('pw').classList.add('on'); selectPlan(plan);
+  $('payerr').textContent = ''; $('pw').classList.add('on'); stopPay(); selectPlan(plan);
   CONFIG.track('paywall_view', { remain: P.flat.length - P.pos, upgrade: upg });
-  const live = await SmartPayClient.load().catch(() => false);
-  $('devnote').hidden = live; $('cardfields').hidden = !live; $('paybtn').hidden = !live; $('wallets').hidden = !(live && SmartPayClient.canWallet()); $('or').hidden = $('wallets').hidden;
-  if (live) { session = await api('/checkout/session', { plan, cubeId }); await SmartPayClient.mount(session); }
+  try { live = (await api('/config', {})).live; } catch (e) { live = false; }   // no server / not configured -> dev mode
+  $('devnote').hidden = live; $('paybtn').hidden = !live;
 }
-function selectPlan(p) { plan = p; document.querySelectorAll('.plan').forEach(b => b.classList.toggle('on', b.dataset.plan === p)); $('paytotal').textContent = priceOf(p).toFixed(2); CONFIG.track('plan_select', p); }
+function selectPlan(p) { plan = p; stopPay(); document.querySelectorAll('.plan').forEach(b => b.classList.toggle('on', b.dataset.plan === p)); $('paytotal').textContent = priceOf(p).toFixed(2); $('paybtn').hidden = !live; CONFIG.track('plan_select', p); }
 document.querySelectorAll('.plan').forEach(b => b.onclick = () => selectPlan(b.dataset.plan));
-$('pw-close').onclick = () => { $('pw').classList.remove('on'); CONFIG.track('paywall_dismiss'); };
+$('pw-close').onclick = () => { stopPay(); $('pw').classList.remove('on'); CONFIG.track('paywall_dismiss'); };
 async function api(path, body) {
   const r = await fetch(CONFIG.apiBase + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'שגיאת שרת'); return r.json();
 }
-function grant(u) { Unlock.set(u); $('pw').classList.remove('on'); render(); toast('הפתרון נפתח 🎉'); CONFIG.track('pay_success', u.plan); forward(); }
+function grant(u) { stopPay(); Unlock.set(u); $('pw').classList.remove('on'); render(); toast('הפתרון נפתח 🎉'); CONFIG.track('pay_success', u.plan); forward(); }
+async function pollStatus() {
+  if (!session) return;
+  try { const r = await api('/checkout/status', { sessionId: session.id }); if (r.paid) grant(r.unlock); } catch (e) {}
+}
+window.addEventListener('message', e => {
+  if (e.data === 'smartpay:done') pollStatus();                                          // success page inside the iframe
+  else if (e.data === 'smartpay:fail') { $('payerr').textContent = 'התשלום לא אושר. אפשר לנסות שוב.'; CONFIG.track('pay_fail', 'declined'); }
+  else if (e.data === 'smartpay:cancel') { stopPay(); CONFIG.track('pay_cancel'); }
+});
 $('paybtn').onclick = async () => {
   const btn = $('paybtn'), email = $('email').value.trim();
   if (!/.+@.+\..+/.test(email)) { $('payerr').textContent = 'צריך אימייל תקין לקבלה.'; return; }
-  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>מעבד תשלום…'; $('payerr').textContent = '';
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>פותח דף תשלום…'; $('payerr').textContent = '';
   try {
-    if (!session) session = await api('/checkout/session', { plan, cubeId });
-    const token = await SmartPayClient.tokenize();
-    const res = await api('/checkout/charge', { sessionId: session.id, plan, paymentToken: token, email, cubeId });
-    grant(res.unlock);
-  } catch (e) { $('payerr').textContent = e.message || 'התשלום לא עבר. נסה שוב.'; CONFIG.track('pay_fail', e.message); }
-  btn.disabled = false; btn.innerHTML = `פתח את הפתרון · ₪<span id="paytotal">${priceOf(plan).toFixed(2)}</span>`;
+    session = await api('/checkout/session', { plan, cubeId, email });
+    $('payframe').src = session.payUrl;
+    $('payframe-wrap').hidden = false; btn.hidden = true;
+    pollTimer = setInterval(pollStatus, 3000);                                           // fallback if the postMessage is missed
+    CONFIG.track('checkout_open', plan);
+  } catch (e) { $('payerr').textContent = e.message || 'לא ניתן להתחיל תשלום כרגע.'; CONFIG.track('pay_fail', e.message); }
+  btn.disabled = false; btn.innerHTML = `מעבר לתשלום מאובטח · ₪<span id="paytotal">${priceOf(plan).toFixed(2)}</span>`;
 };
 $('restore').onclick = async () => {
   const email = $('email').value.trim(); if (!email) { $('payerr').textContent = 'הזן את האימייל שאיתו שילמת.'; return; }

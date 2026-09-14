@@ -1,4 +1,4 @@
-// index.js — API for the cube solver: checkout sessions, charges, unlock tokens, restore.
+// index.js — API for the cube solver: hosted-checkout sessions, IPN, unlock tokens, restore.
 import express from 'express';
 import crypto from 'node:crypto';
 import path from 'node:path';
@@ -10,11 +10,13 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..')));   // serves index.html
 
+const PORT = process.env.PORT || 3000;
+const BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
 const SECRET = process.env.UNLOCK_SECRET || 'dev-secret';
 const PRICES = { single: +(process.env.PRICE_SINGLE || 7.90), unlimited: +(process.env.PRICE_UNLIMITED || 24.90) };
 
 // In-memory stores — replace with a DB (SQLite/Postgres) before launch.
-const sessions = new Map();     // id -> {plan, cubeId, amount, createdAt}
+const sessions = new Map();     // id -> {plan, cubeId, email, amount, agorot, status, unlock?, txId?, createdAt}
 const purchases = new Map();    // email -> [{plan, cubeId, txId, at}]
 
 function sign(payload) {
@@ -39,33 +41,76 @@ function priceFor(plan, email) {
   if (plan === 'unlimited' && prior) return +(PRICES.unlimited - PRICES.single).toFixed(2);
   return PRICES[plan];
 }
+function markPaid(id, txId) {
+  const s = sessions.get(id);
+  if (!s || s.status === 'paid') return s;
+  s.status = 'paid'; s.txId = txId || null;
+  const list = purchases.get(s.email) || [];
+  list.push({ plan: s.plan, cubeId: s.cubeId, txId: s.txId, at: Date.now() });
+  purchases.set(s.email, list);
+  s.unlock = unlockFor(s.plan, s.cubeId);
+  return s;
+}
+// The IPN carries no signature, so a payment counts only after SmartPay itself confirms it.
+async function confirmWithSmartPay(id) {
+  const s = sessions.get(id);
+  if (!s || !smartpay.configured()) return null;
+  if (s.status === 'paid') return s;
+  try {
+    const r = await smartpay.getChargeByOrder(id);
+    if (r.paid && (r.amount === undefined || +r.amount === s.agorot)) return markPaid(id, r.transactionId);
+  } catch (e) { console.error('smartpay verify failed:', e.message); }
+  return s;
+}
+
+app.post('/api/config', (req, res) => res.json({ live: smartpay.configured(), prices: PRICES }));
 
 app.post('/api/checkout/session', async (req, res) => {
   const { plan, cubeId, email } = req.body || {};
   if (!PRICES[plan]) return res.status(400).json({ error: 'תוכנית לא מוכרת' });
+  if (!/.+@.+\..+/.test(email || '')) return res.status(400).json({ error: 'נדרש אימייל תקין' });
+  if (!smartpay.configured()) return res.status(503).json({ error: 'הסליקה עדיין לא מוגדרת בשרת' });
   const id = crypto.randomUUID();
   const amount = priceFor(plan, email);
+  const agorot = Math.round(amount * 100);
   try {
-    const sp = await smartpay.createSession({ amount, currency: 'ILS', description: plan === 'single' ? 'CubeSolve — פתרון אחד' : 'CubeSolve — ללא הגבלה', orderId: id });
-    sessions.set(id, { plan, cubeId, amount, createdAt: Date.now() });
-    res.json({ id, amount, clientToken: sp.clientToken });
-  } catch (e) { res.status(502).json({ error: 'לא ניתן להתחיל תשלום כרגע' }); }
+    const page = await smartpay.createCheckoutPage({
+      amount: agorot, orderId: id, baseUrl: BASE_URL, email,
+      description: plan === 'single' ? 'CubeSolve — פתרון אחד' : 'CubeSolve — ללא הגבלה',
+    });
+    sessions.set(id, { plan, cubeId, email, amount, agorot, status: 'pending', createdAt: Date.now() });
+    res.json({ id, amount, payUrl: page.url });
+  } catch (e) {
+    console.error('checkout session failed:', e.message);
+    res.status(502).json({ error: 'לא ניתן להתחיל תשלום כרגע' });
+  }
 });
 
-app.post('/api/checkout/charge', async (req, res) => {
-  const { sessionId, paymentToken, email, cubeId } = req.body || {};
+// The client polls here after opening the payment iframe; verification happens
+// against SmartPay directly, so this works even if the IPN never arrives.
+app.post('/api/checkout/status', async (req, res) => {
+  const { sessionId } = req.body || {};
   const s = sessions.get(sessionId);
-  if (!s) return res.status(400).json({ error: 'סשן תשלום לא נמצא' });
-  if (!email) return res.status(400).json({ error: 'נדרש אימייל' });
-  try {
-    const r = await smartpay.charge({ paymentToken, amount: s.amount, currency: 'ILS', orderId: sessionId, email,
-      description: s.plan === 'single' ? 'CubeSolve — פתרון אחד' : 'CubeSolve — ללא הגבלה' });
-    if (!r.ok) return res.status(402).json({ error: 'התשלום לא אושר. בדוק את פרטי הכרטיס.' });
-    const list = purchases.get(email) || []; list.push({ plan: s.plan, cubeId: cubeId || s.cubeId, txId: r.transactionId, at: Date.now() }); purchases.set(email, list);
-    sessions.delete(sessionId);
-    res.json({ unlock: unlockFor(s.plan, cubeId || s.cubeId) });
-  } catch (e) { res.status(502).json({ error: 'שגיאה מול חברת הסליקה' }); }
+  if (!s) return res.status(404).json({ error: 'סשן תשלום לא נמצא' });
+  if (s.status !== 'paid') await confirmWithSmartPay(sessionId);
+  if (s.status === 'paid') return res.json({ paid: true, unlock: s.unlock });
+  res.json({ paid: false });
 });
+
+// IPN — SmartPay POSTs here on successful payment. Must answer 200 or it retries (5x).
+app.post('/api/webhooks/smartpay', async (req, res) => {
+  const orderId = req.body?.transaction?.moreinfo1;
+  if (orderId && sessions.has(orderId) && req.body?.status === 'succeeded') {
+    await confirmWithSmartPay(orderId);
+  }
+  res.sendStatus(200);
+});
+
+// Landing pages for the hosted checkout's redirect (rendered inside the iframe).
+const payPage = (title, msg, signal) => `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:'Segoe UI',Arial,sans-serif;background:#1c2230;color:#f3f1ea;display:grid;place-items:center;min-height:100vh;margin:0;text-align:center"><div><h2>${title}</h2><p style="color:#9aa3b5">${msg}</p></div><script>try{parent.postMessage('smartpay:${signal}','*')}catch(e){}<\/script></body></html>`;
+app.get('/pay/success', (req, res) => res.send(payPage('התשלום התקבל ✔', 'רק רגע, פותחים את הפתרון…', 'done')));
+app.get('/pay/fail', (req, res) => res.send(payPage('התשלום לא אושר', 'אפשר לנסות שוב עם כרטיס אחר.', 'fail')));
+app.get('/pay/cancel', (req, res) => res.send(payPage('התשלום בוטל', 'אפשר לחזור ולשלם בכל שלב.', 'cancel')));
 
 app.post('/api/restore', (req, res) => {
   const { email, cubeId } = req.body || {};
@@ -83,4 +128,4 @@ app.post('/api/unlock/verify', (req, res) => {
   res.json({ ok: true, ...p });
 });
 
-app.listen(process.env.PORT || 3000, () => console.log('CubeSolve API on :' + (process.env.PORT || 3000)));
+app.listen(PORT, () => console.log(`CubeSolve API on :${PORT} (SmartPay ${smartpay.configured() ? 'LIVE — ' + (process.env.SMARTPAY_API_URL || 'sandbox') : 'not configured, dev mode'})`));
