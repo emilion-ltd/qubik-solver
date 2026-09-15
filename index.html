@@ -12,14 +12,14 @@
 <meta property="og:type" content="website">
 <meta property="og:locale" content="he_IL">
 <meta property="og:site_name" content="CubeSolve">
-<meta property="og:title" content="CubeSolve — פתרון קובייה הונגרית עם מצלמה">
+<meta property="og:title" content="CubeSolve: פתרון קובייה הונגרית עם מצלמה">
 <meta property="og:description" content="מצלמים את הקובייה, בודקים צבעים ועוקבים אחר פתרון בתלת־ממד בעברית. כולל בדיקת פינה מסובבת והתקנה לנייד.">
 <meta property="og:image" content="./icons/icon-512.png">
 <meta property="og:image:width" content="512">
 <meta property="og:image:height" content="512">
-<meta property="og:image:alt" content="לוגו CubeSolve — רשת צבעי קובייה על רקע כהה">
+<meta property="og:image:alt" content="לוגו CubeSolve: רשת צבעי קובייה על רקע כהה">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="CubeSolve — פתרון קובייה הונגרית בעברית">
+<meta name="twitter:title" content="CubeSolve: פתרון קובייה הונגרית בעברית">
 <meta name="twitter:description" content="פתרון קוביית 3×3 לפי צילום, הדרכה בתלת־ממד ובדיקת פינה מסובבת.">
 <meta name="twitter:image" content="./icons/icon-512.png">
 <!-- deployment-seo -->
@@ -145,6 +145,9 @@
   .nf i:focus-visible { outline:3px solid white; }
   @media (prefers-reduced-motion: reduce) { .nf i.diag { animation:none; } }
 .brand,.brand a{display:flex;align-items:center;gap:8px}.brand{justify-content:space-between;margin-bottom:10px}.brand a{color:var(--ink);text-decoration:none;font-weight:800;font-size:22px}.brand img{border-radius:10px}.share{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:8px 14px}.content-nav{display:flex;flex-wrap:wrap;gap:14px;margin:24px 0 0}.guide a,.content-nav a{color:var(--accent)}.guide p,.guide li{font-size:15px}.guide ol{padding-inline-start:22px}.guide details{padding:12px 0;border-bottom:1px solid var(--line)}.guide summary{cursor:pointer;font-weight:600}.guide details p{margin-top:8px}.byline{margin-top:16px}
+/* Reserve room for hosted checkout fields and validation messages. */
+#payframe{display:block;width:100%;height:900px;border:0;border-radius:14px;background:#fff}
+@media(max-width:600px){#payframe{height:1100px}}
 </style>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
@@ -154,18 +157,18 @@
 <script src="./payment-client.js" defer></script>
 </head>
 <body>
-<header class="brand"><a href="./" aria-label="CubeSolve — עמוד הבית"><img src="./icons/icon-192.png" width="44" height="44" alt=""><span dir="ltr">CubeSolve</span></a><button id="share-app" class="share" type="button">שתף</button></header>
+<header class="brand"><a href="./" aria-label="CubeSolve: עמוד הבית"><img src="./icons/icon-192.png" width="44" height="44" alt=""><span dir="ltr">CubeSolve</span></a><button id="share-app" class="share" type="button">שתף</button></header>
 <section class="card" id="purchase-access" hidden aria-live="polite"><p id="access-label"></p><details><summary>שמור קוד שחזור למכשיר אחר</summary><p>זהו קוד אישי המאפשר גישה לרכישה. שמור אותו במקום פרטי; הוא אינו נשלח אוטומטית באימייל.</p><textarea id="recovery-code" readonly dir="ltr" style="width:100%"></textarea><button class="btn" id="copy-recovery">העתק קוד שחזור</button></details></section>
 <main>
 
 <div class="card" id="pwa-status" role="status" hidden></div>
 <button class="btn" id="install-app" hidden>התקן את CubeSolve</button>
-<button class="btn" id="update-app" hidden>גרסה חדשה זמינה — עדכן בסיום הפתרון</button>
+<button class="btn" id="update-app" hidden>גרסה חדשה זמינה: עדכן בסיום הפתרון</button>
 <!-- ================= HOME ================= -->
 <section class="screen on" id="s-home">
   <div class="hero">
     <span class="badge">קוביית 3×3. צעד אחר צעד.</span>
-    <h1 style="margin-top:10px">פתרון קובייה הונגרית עם מצלמה — בעברית</h1>
+    <h1 style="margin-top:10px">פתרון קובייה הונגרית עם מצלמה בעברית</h1>
     <p class="muted">מצלמים שש פאות, ומקבלים פתרון מדויק למצב של הקוביה שלך: כל סיבוב מוצג בתלת־ממד, ואתה חוזר עליו על הקוביה.</p>
     <div class="demo"><div class="scene" id="scene-home" style="height:150px;border-radius:18px"><div class="cube" id="cube-home"></div></div></div>
   </div>
@@ -189,7 +192,7 @@
     </section>
     <section id="twisted-corner" class="card">
       <h2>פינה מסובבת בקובייה: איך מזהים ומה מתקנים?</h2>
-      <p>סיבוב של פינה בודדת במקומה, בלי סיבוב שכבה, יוצר מצב שאי אפשר לפתור בסיבובי שכבות רגילים. לפעמים גם טעות בהזנת צבעים נראית כמו תקלה בקובייה — לכן קודם בודקים את התרשים.</p>
+      <p>סיבוב של פינה בודדת במקומה, בלי סיבוב שכבה, יוצר מצב שאי אפשר לפתור בסיבובי שכבות רגילים. לפעמים גם טעות בהזנת צבעים נראית כמו תקלה בקובייה, לכן קודם בודקים את התרשים.</p>
       <p>האפליקציה בודקת את כיווני כל הפינות, גם בקובייה מעורבבת. כשאפשר להציע תיקון, היא מסמנת פינה ומציינת איזה צבע צריך לפנות למעלה, קדימה או לצד. זו הצעת תיקון שמחזירה פתירות, ולא זיהוי ודאי של הפינה שסובבה בעבר.</p>
       <p>יש לתקן את הקובייה שביד לפני עדכון התרשים. אם החלק אינו זז בקלות, לא מפעילים כוח ונעזרים בהוראות היצרן.</p>
     </section>
@@ -266,7 +269,7 @@
     <div class="pay-form">
       <div class="field"><input id="email" type="email" placeholder="אימייל לקבלה" autocomplete="email"></div>
       <div id="payframe-wrap" hidden style="margin-top:10px"><a id="external-checkout" class="btn" target="_blank" rel="noopener noreferrer">דף התשלום לא מוצג? פתח בחלון חדש</a>
-        <iframe id="payframe" title="תשלום מאובטח — SmartPay" allow="payment" style="width:100%;height:480px;border:0;border-radius:14px;background:#fff"></iframe>
+        <iframe id="payframe" title="תשלום מאובטח: SmartPay" allow="payment" ></iframe>
       </div>
       <div class="payerr" id="payerr"></div>
       <button class="btn primary" id="paybtn">מעבר לתשלום מאובטח · ₪<span id="paytotal">24.90</span></button>
@@ -302,7 +305,7 @@ const CONFIG = {
 const $ = id => document.getElementById(id);
 $('share-app').onclick = async () => {
   const url = document.querySelector('link[rel="canonical"]')?.href || new URL('./',location.href).href;
-  const data = {title:'CubeSolve — פתרון קובייה הונגרית',text:'מצלמים את הקובייה ופותרים צעד אחר צעד בעברית.',url};
+  const data = {title:'CubeSolve: פתרון קובייה הונגרית',text:'מצלמים את הקובייה ופותרים צעד אחר צעד בעברית.',url};
   try { if(navigator.share) await navigator.share(data); else { await navigator.clipboard.writeText(url); toast('הקישור הועתק לשיתוף'); } }
   catch(error) { if(error.name !== 'AbortError') toast('אפשר להעתיק את כתובת האתר ולשתף אותה.'); }
 };
@@ -318,13 +321,13 @@ function toast(t) { const e = $('toast'); e.textContent = t; e.style.display = '
 const hash = str => { let h = 5381; for (const c of str) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0; return h.toString(36); };
 
 /* ============================================================
-   SCAN — guided capture, white on top, green facing you
+   SCAN: guided capture, white on top, green facing you
    ============================================================ */
-// The cube may be fully scrambled — only the CENTER sticker of each face matters
+// The cube may be fully scrambled: only the CENTER sticker of each face matters
 // (centers never move: white center up + green center front puts red right, orange left).
 const SCAN_ORDER = [
-  { face:'F', center:'G', text:'החזק כך שהמרכז הלבן למעלה והמרכז הירוק מולך (שאר המשבצות בכל צבע — זה בסדר). צלם.' },
-  { face:'R', center:'R', text:'סובב את הקוביה שמאלה, כך שהפאה שהייתה מימין — עם המרכז האדום — תפנה אליך. הלבן נשאר למעלה.' },
+  { face:'F', center:'G', text:'החזק כך שהמרכז הלבן למעלה והמרכז הירוק מולך (שאר המשבצות בכל צבע: זה בסדר). צלם.' },
+  { face:'R', center:'R', text:'סובב את הקוביה שמאלה, כך שהפאה שהייתה מימין, עם המרכז האדום, תפנה אליך. הלבן נשאר למעלה.' },
   { face:'B', center:'B', text:'סובב שוב שמאלה: עכשיו מולך הפאה עם המרכז הכחול.' },
   { face:'L', center:'O', text:'סובב שוב שמאלה: עכשיו מולך הפאה עם המרכז הכתום.' },
   { face:'U', center:'W', text:'חזור למרכז הירוק מולך, והטה את הקוביה כלפיך: המרכז הלבן מול המצלמה, והפאה הירוקה למטה.' },
@@ -334,7 +337,7 @@ const FACE_OFFSET = { U:0, R:9, F:18, D:27, L:36, B:45 };
 let scanIdx = 0, samples = {}; // face -> [9 x [r,g,b]]
 let stream = null, liveTimer = null, warnFace = -1;
 
-// color features: chromaticity + saturation + brightness — robust-ish to lighting
+// color features: chromaticity + saturation + brightness: robust-ish to lighting
 const feat = ([r, g, b]) => {
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b), s = r + g + b + 1e-6;
   return [r/s*3, g/s*3, b/s*3, (mx ? (mx - mn) / mx : 0) * 1.2, mx/255 * 0.8];
@@ -349,7 +352,7 @@ function startLivePreview() {
     const s = sampleFace(); if (!s) return;
     s.forEach((rgb, i) => { if (cells[i]) cells[i].style.background = `rgba(${rgb.map(Math.round).join(',')},.55)`; });
     const bright = s.reduce((t, c) => t + Math.max(...c), 0) / 9;
-    $('cammsg').textContent = bright < 55 ? 'חשוך מדי — קרב את הקוביה לאור' : 'מלא את הריבועים עם הפאה. הריבועים מראים את הצבע שזוהה';
+    $('cammsg').textContent = bright < 55 ? 'חשוך מדי: קרב את הקוביה לאור' : 'מלא את הריבועים עם הפאה. הריבועים מראים את הצבע שזוהה';
   }, 250);
 }
 async function startCamera() {
@@ -359,7 +362,7 @@ async function startCamera() {
     startLivePreview();
     return true;
   } catch (e) {
-    const why = e && e.name === 'NotAllowedError' ? 'הדפדפן חסם — צריך לאשר גישה למצלמה'
+    const why = e && e.name === 'NotAllowedError' ? 'הדפדפן חסם: צריך לאשר גישה למצלמה'
       : e && e.name === 'NotFoundError' ? 'לא נמצאה מצלמה במכשיר'
       : location.protocol !== 'https:' && location.hostname !== 'localhost' ? 'מצלמה עובדת רק ב־HTTPS או localhost'
       : (e && e.name) || 'שגיאה';
@@ -377,7 +380,7 @@ function renderScanUI() {
   const d = $('dots'); d.innerHTML = '';
   SCAN_ORDER.forEach((s, i) => { const sp = document.createElement('span'); sp.textContent = i + 1; sp.className = i < scanIdx ? 'done' : (i === scanIdx ? 'cur' : ''); d.appendChild(sp); });
   const cur = SCAN_ORDER[scanIdx]; $('holdtext').textContent = cur.text;
-  // only the center is shown in color — the rest of the face can be any mix of colors
+  // only the center is shown in color: the rest of the face can be any mix of colors
   const mini = $('mini'); mini.innerHTML = '';
   for (let i = 0; i < 9; i++) {
     const c = document.createElement('i');
@@ -437,7 +440,7 @@ function classify() {
 // non-blocking sanity check: warn once, a second tap on the same face accepts anyway
 function snapProblem(s) {
   const bright = s.reduce((t, c) => t + Math.max(...c), 0) / 9;
-  if (bright < 55) return 'חשוך מדי — קרב את הקוביה לאור';
+  if (bright < 55) return 'חשוך מדי: קרב את הקוביה לאור';
   const expected = SCAN_ORDER[scanIdx].center;
   const nearest = rgb => Object.keys(ANCHOR).sort((a, b) => dist(rgb, ANCHOR[a]) - dist(rgb, ANCHOR[b]))[0];
   const got = nearest(s[4]);
@@ -445,11 +448,11 @@ function snapProblem(s) {
   if (scanIdx < 4) {
     // side faces are accepted in any order (identified by their center later);
     // warn only when the camera clearly sees top/bottom or a face already captured
-    if (confident && (got === 'W' || got === 'Y')) return `זה נראה כמו המרכז ה${HEB[got]} — עכשיו מצלמים את פאות הצד (הלבן נשאר למעלה)`;
+    if (confident && (got === 'W' || got === 'Y')) return `זה נראה כמו המרכז ה${HEB[got]}: עכשיו מצלמים את פאות הצד (הלבן נשאר למעלה)`;
     const seen = Object.values(samples).map(sm => nearest(sm[4]));
     if (confident && seen.includes(got)) return `נראה שכבר צילמת את הפאה עם המרכז ה${HEB[got]}`;
   } else if (confident) {
-    return `המרכז לא נראה ${HEB[expected]} אלא ${HEB[got]} — בדוק את האחיזה`;
+    return `המרכז לא נראה ${HEB[expected]} אלא ${HEB[got]}: בדוק את האחיזה`;
   }
   return null;
 }
@@ -480,7 +483,7 @@ $('go-demo').onclick = () => {
 };
 
 /* ============================================================
-   REVIEW — net editor
+   REVIEW: net editor
    ============================================================ */
 const NET_POS = { U:[1,0], L:[0,1], F:[1,1], R:[2,1], B:[3,1], D:[1,2] };
 const NET_LBL = { U:'למעלה (לבן)', L:'שמאל (כתום)', F:'קדימה (ירוק)', R:'ימין (אדום)', B:'אחור (כחול)', D:'למטה (צהוב)' };
@@ -525,7 +528,7 @@ function showSolveError(genericMsg, diag) {
   if (!diag.fix) return;
   const snapshot = facelets.join('');
   const button = document.createElement('button'); button.className = 'btn'; button.type = 'button';
-  button.textContent = 'תיקנתי את הפינה בקובייה — עדכן את התרשים';
+  button.textContent = 'תיקנתי את הפינה בקובייה: עדכן את התרשים';
   button.onclick = () => {
     if (facelets.join('') !== snapshot) { paintNet(); return; }
     diag.idx.forEach((i,k) => facelets[i] = diag.fix[k]);
@@ -565,7 +568,7 @@ function rotateZ2(s) {
 }
 
 /* ============================================================
-   SOLVE — 3D player + steps + paywall gate
+   SOLVE: 3D player + steps + paywall gate
    ============================================================ */
 const GAP = 53, NORMALS = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 const FACE_T = { '1,0,0':'rotateY(90deg)', '-1,0,0':'rotateY(-90deg)', '0,1,0':'rotateX(90deg)', '0,-1,0':'rotateX(-90deg)', '0,0,1':'', '0,0,-1':'rotateY(180deg)' };

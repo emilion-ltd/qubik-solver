@@ -23,7 +23,7 @@ async function api(path,body){
 }
 function showCredential(u){
   $('purchase-access').hidden=false;
-  $('access-label').textContent=u.plan==='unlimited'?'הרכישה אומתה — גישה ללא הגבלה':'הרכישה אומתה — גישה לקובייה שנרכשה עד '+new Date(u.exp).toLocaleDateString('he-IL');
+  $('access-label').textContent=u.plan==='unlimited'?'הרכישה אומתה: גישה ללא הגבלה':'הרכישה אומתה: גישה לקובייה שנרכשה עד '+new Date(u.exp).toLocaleDateString('he-IL');
   $('recovery-code').value=u.token;
 }
 $('copy-recovery').onclick=async()=>{try{await navigator.clipboard.writeText($('recovery-code').value);toast('קוד השחזור הועתק');}catch{$('recovery-code').select();toast('סמן והעתק את קוד השחזור');}};
@@ -47,7 +47,7 @@ async function openPaywall(){
   try{
     const c=await api('/config',{});live=c.live===true;CONFIG.prices=c.prices;
     $('p-single').textContent=c.prices.single.toFixed(2);$('p-unl').textContent=c.prices.unlimited.toFixed(2);$('p-unl-was').hidden=true;
-    $('payerr').textContent=live?(c.mode==='sandbox'?'סביבת בדיקות — לא מתבצע חיוב אמיתי.':''):'חסרות הגדרות סליקה בשרת. יש לפנות לתמיכה.';
+    $('payerr').textContent=live?(c.mode==='sandbox'?'סביבת בדיקות: לא מתבצע חיוב אמיתי.':''):'חסרות הגדרות סליקה בשרת. יש לפנות לתמיכה.';
     selectPlan(plan);
   }catch(e){$('payerr').textContent=e.message;}
   $('paybtn').hidden=!live;
