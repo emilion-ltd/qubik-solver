@@ -100,3 +100,22 @@ test('GET and POST returns render without granting access from browser claims',a
   assert.equal((await f.post('/checkout/status',{sessionId:checkout.body.id})).body.paid,false);
  }finally{await f.close();}
 });
+
+test('pending verification reports safe reasons without granting mismatched purchases',async()=>{
+ const f=await fixture();try{
+  const c=await f.post('/checkout/session',{state,plan:'unlimited',email:'debug@example.com'}),id=c.body.id;
+  for(const [tx,reason]of [
+   [{paid:false},'awaiting_provider'],
+   [{paid:false,failed:true},'declined'],
+   [{paid:true,amount:790,transactionId:'tx'},'amount_mismatch'],
+   [{paid:true,amount:2490},'missing_transaction_id'],
+   [{paid:true,amount:2490,transactionId:'tx',orderId:'other'},'order_mismatch']
+  ]){
+   f.transactions.set(id,tx);const r=await f.post('/checkout/status',{sessionId:id});
+   assert.equal(r.body.paid,false);assert.equal(r.body.verification,reason);
+   assert.match(r.body.checkId,/^[0-9a-f]{12}$/);assert.equal(r.body.unlock,undefined);
+  }
+  f.transactions.set(id,{paid:true,amount:2490,transactionId:'tx',orderId:id});
+  assert.equal((await f.post('/checkout/status',{sessionId:id})).body.paid,true);
+ }finally{await f.close();}
+});

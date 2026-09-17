@@ -77,7 +77,8 @@ document.getElementById('update').onclick=async function(){
       const claims={plan:s.plan,cubeId:s.plan==='single'?s.cubeId:null,exp:s.plan==='single'?Date.now()+7*864e5:0};
       s=store.markPaid(id,tx.transactionId,{...claims,token:sign(claims)});
     }
-    return {...s,providerFailed:!!tx.failed};
+    const verification=tx.failed?'declined':!tx.paid?'awaiting_provider':!Number.isSafeInteger(tx.amount)||tx.amount!==s.agorot?'amount_mismatch':!tx.transactionId?'missing_transaction_id':tx.orderId&&tx.orderId!==id?'order_mismatch':'paid';
+    return {...s,providerFailed:!!tx.failed,verification};
   }
   app.post('/api/checkout/session',limit,wrap(async(req,res)=>{
     const {plan,state,token}=req.body||{},email=normalize(req.body?.email);
@@ -95,7 +96,7 @@ document.getElementById('update').onclick=async function(){
   }));
   app.post('/api/checkout/status',limit,wrap(async(req,res)=>{
     const id=req.body?.sessionId;if(typeof id!=='string'||!store.getSession(id))throw fail(404,'סשן תשלום לא נמצא');
-    const s=await confirm(id);res.json(s.status==='paid'?{paid:true,unlock:s.unlock}:{paid:false,failed:s.providerFailed});
+    const s=await confirm(id);res.json(s.status==='paid'?{paid:true,unlock:s.unlock}:{paid:false,failed:s.providerFailed,verification:s.verification,checkId:crypto.createHash('sha256').update(id).digest('hex').slice(0,12)});
   }));
   app.post('/api/webhooks/smartpay',wrap(async(req,res)=>{
     const id=req.body?.transaction?.moreinfo1;
