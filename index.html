@@ -269,6 +269,7 @@
     <div class="pay-form">
       <div class="field"><input id="email" type="email" placeholder="אימייל לקבלה" autocomplete="email"></div>
       <div id="payframe-wrap" hidden style="margin-top:10px"><a id="external-checkout" class="btn" target="_blank" rel="noopener noreferrer">דף התשלום לא מוצג? פתח בחלון חדש</a>
+        <p id="pay-status" role="status" aria-live="polite"></p><button id="check-payment" type="button" class="btn">כבר שילמתי, בדוק אישור תשלום</button>
         <iframe id="payframe" title="תשלום מאובטח: SmartPay" allow="payment" ></iframe>
       </div>
       <div class="payerr" id="payerr"></div>

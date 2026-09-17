@@ -5,6 +5,7 @@ const Unlock={
   memory:null
 };
 const credential=()=>Unlock.memory||Unlock.get();
+let lastPaymentStatus='';
 let plan='unlimited',session=null,pollTimer=null,live=false,polling=false,premiumLoading=false;
 async function api(path,body){
   let r;
@@ -67,9 +68,15 @@ async function pollStatus(){
     const r=await api('/checkout/status',{sessionId:id});
     if(session?.id!==id)return;
     if(r.paid)await grant(r.unlock);
-    else if(r.failed)$('payerr').textContent='התשלום לא אושר. אפשר לנסות שוב בדף התשלום.';
-  }catch(e){$('payerr').textContent=e.message;}finally{polling=false;}
+    else {
+      const messages={declined:'SmartPay מדווח שהעסקה נדחתה.',awaiting_provider:'SmartPay עדיין לא החזיר אישור חיוב. אם כבר הזנת אשראי, אל תשלם שוב.',amount_mismatch:'התקבל אישור עסקה אך הסכום אינו תואם לרכישה. יש לפנות לתמיכה.',missing_transaction_id:'התקבל אישור ללא מזהה עסקה. יש לפנות לתמיכה.',order_mismatch:'העסקה שהתקבלה אינה תואמת להזמנה. יש לפנות לתמיכה.'};
+      $('pay-status').textContent=(messages[r.verification]||'ממתינים לאישור התשלום.')+(r.checkId?' מזהה בדיקה: '+r.checkId:'');
+      const statusKey=(r.checkId||'')+':'+(r.verification||'pending');
+      if(statusKey!==lastPaymentStatus){lastPaymentStatus=statusKey;console.info('[payment-status]',{verification:r.verification||'pending',checkId:r.checkId});}
+    }
+  }catch(e){$('payerr').textContent=e.message;$('pay-status').textContent=e.message;}finally{polling=false;}
 }
+$('check-payment').onclick=()=>pollStatus();
 $('paybtn').onclick=async()=>{
   const email=$('email').value.trim();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){$('payerr').textContent='הזן אימייל תקין לרכישה.';return;}
   if(!P.initial){$('payerr').textContent='יש להזין קובייה לפני רכישת פתרון.';return;}
@@ -77,7 +84,7 @@ $('paybtn').onclick=async()=>{
   try{
     session=await api('/checkout/session',{clientVersion:2,plan,state:P.initial,email,token:credential()?.token});
     try{localStorage.setItem('cube_checkout',JSON.stringify({id:session.id}));}catch{}
-    $('payframe').src=session.payUrl;$('external-checkout').href=session.payUrl;$('payframe-wrap').hidden=false;btn.hidden=true;
+    $('pay-status').textContent='ממתינים לאישור התשלום מ־SmartPay.';$('payframe').src=session.payUrl;$('external-checkout').href=session.payUrl;$('payframe-wrap').hidden=false;btn.hidden=true;
     $('payerr').textContent='הסכום לתשלום: ₪'+session.amount.toFixed(2);
     if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(pollStatus,5000);
   }catch(e){$('payerr').textContent=e.message;}finally{btn.disabled=false;}
